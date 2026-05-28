@@ -78,9 +78,7 @@ class FreshRSSClient:
         # stream can be briefly slow to serialize when FreshRSS is busy
         # crawling feeds, but if the server is genuinely down we want to
         # know within a few seconds.
-        self._client = client or httpx.Client(
-            timeout=httpx.Timeout(connect=5.0, read=120.0, write=10.0, pool=5.0)
-        )
+        self._client = client or httpx.Client(timeout=httpx.Timeout(connect=5.0, read=120.0, write=10.0, pool=5.0))
         self._auth_token: str | None = None
         self._write_token: str | None = None
 
@@ -159,10 +157,7 @@ class FreshRSSClient:
         return self._list(limit=limit, unread_only=False)
 
     def _list(self, limit: int, unread_only: bool) -> list[FeedItem]:
-        url = (
-            f"{self._config.freshrss_url}/api/greader.php"
-            f"/reader/api/0/stream/contents/{READING_LIST}"
-        )
+        url = f"{self._config.freshrss_url}/api/greader.php" f"/reader/api/0/stream/contents/{READING_LIST}"
         # FreshRSS's GReader implementation only reads a single ``xt`` param
         # (``$_GET['xt']`` — last value wins under repeated keys) and only
         # honours ``user/-/state/com.google/{read,unread,starred}`` as the
@@ -213,24 +208,18 @@ class FreshRSSClient:
         token = self._get_write_token()
         for start in range(0, len(item_ids), EDIT_TAG_BATCH):
             batch = item_ids[start : start + EDIT_TAG_BATCH]
-            body = urlencode(
-                [("a", READ_STATE), ("T", token)] + [("i", iid) for iid in batch]
-            )
+            body = urlencode([("a", READ_STATE), ("T", token)] + [("i", iid) for iid in batch])
             headers = {
                 **self._headers(),
                 "Content-Type": "application/x-www-form-urlencoded",
             }
             self._post_edit_tag(url, headers=headers, body=body, batch_size=len(batch))
 
-    def _post_edit_tag(
-        self, url: str, *, headers: dict[str, str], body: str, batch_size: int
-    ) -> None:
+    def _post_edit_tag(self, url: str, *, headers: dict[str, str], body: str, batch_size: int) -> None:
         """POST one edit-tag batch with retry+backoff on transient failures."""
         for attempt in range(1, MARK_READ_MAX_ATTEMPTS + 1):
             try:
-                resp = self._client.post(
-                    url, headers=headers, content=body, timeout=MARK_READ_TIMEOUT_S
-                )
+                resp = self._client.post(url, headers=headers, content=body, timeout=MARK_READ_TIMEOUT_S)
             except (httpx.TimeoutException, httpx.NetworkError) as exc:
                 if attempt == MARK_READ_MAX_ATTEMPTS:
                     raise

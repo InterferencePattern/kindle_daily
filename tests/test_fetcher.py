@@ -278,14 +278,9 @@ def test_rewrite_images_inline_rewrites_src_and_drops_failures(monkeypatch):
 def test_rewrite_images_inline_caps_at_max_per_article(monkeypatch):
     import kindle_daily.fetcher as fetcher_mod
 
-    monkeypatch.setattr(
-        fetcher_mod, "_download_and_optimize", lambda _c, u: _fake_asset(u)
-    )
+    monkeypatch.setattr(fetcher_mod, "_download_and_optimize", lambda _c, u: _fake_asset(u))
 
-    imgs = "".join(
-        f'<img src="https://x.test/img-{i}.jpg"/>'
-        for i in range(fetcher_mod.MAX_IMAGES_PER_ARTICLE + 3)
-    )
+    imgs = "".join(f'<img src="https://x.test/img-{i}.jpg"/>' for i in range(fetcher_mod.MAX_IMAGES_PER_ARTICLE + 3))
     out, assets = _rewrite_images_inline(imgs, "https://x.test/", client=None)
     assert len(assets) == fetcher_mod.MAX_IMAGES_PER_ARTICLE
     # Over-cap images are dropped from the HTML so Kindle doesn't show
@@ -323,13 +318,8 @@ def test_rewrite_images_inline_resolves_relative_and_lazy(monkeypatch):
 
     monkeypatch.setattr(fetcher_mod, "_download_and_optimize", fake_download)
 
-    body = (
-        '<img src="data:image/gif;base64,xxx" data-src="/lazy.jpg"/>'
-        '<img src="../up.jpg"/>'
-    )
-    _out, assets = _rewrite_images_inline(
-        body, "https://x.test/section/article", client=None
-    )
+    body = '<img src="data:image/gif;base64,xxx" data-src="/lazy.jpg"/>' '<img src="../up.jpg"/>'
+    _out, assets = _rewrite_images_inline(body, "https://x.test/section/article", client=None)
     # data: URL ignored; lazy-load attribute picked up
     assert captured[0] == "https://x.test/lazy.jpg"
     # relative URL resolved against base
@@ -340,13 +330,9 @@ def test_rewrite_images_inline_resolves_relative_and_lazy(monkeypatch):
 def test_rewrite_images_inline_skips_noise_substrings(monkeypatch):
     import kindle_daily.fetcher as fetcher_mod
 
-    monkeypatch.setattr(
-        fetcher_mod, "_download_and_optimize", lambda _c, u: _fake_asset(u)
-    )
+    monkeypatch.setattr(fetcher_mod, "_download_and_optimize", lambda _c, u: _fake_asset(u))
 
-    body = (
-        '<img src="https://x.test/logo.png"/>' '<img src="https://x.test/photo.jpg"/>'
-    )
+    body = '<img src="https://x.test/logo.png"/>' '<img src="https://x.test/photo.jpg"/>'
     out, assets = _rewrite_images_inline(body, "https://x.test/", client=None)
     assert len(assets) == 1
     assert assets[0].source_url.endswith("photo.jpg")

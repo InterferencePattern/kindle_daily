@@ -177,11 +177,7 @@ def _add_image_assets(book: epub.EpubBook, articles: list[Article]) -> None:
 
 def _load_css() -> str:
     """Load the bundled magazine stylesheet."""
-    return (
-        resources.files("kindle_daily.assets")
-        .joinpath(CSS_FILENAME)
-        .read_text(encoding="utf-8")
-    )
+    return resources.files("kindle_daily.assets").joinpath(CSS_FILENAME).read_text(encoding="utf-8")
 
 
 def _group_by_section(articles: list[Article]) -> "OrderedDict[str, list[Article]]":
@@ -286,9 +282,5 @@ def _article_href(art: Article) -> str:
 
 
 def _make_colophon(date: dt.date) -> epub.EpubHtml:
-    body = (
-        '<div class="colophon">'
-        f"Generated {html.escape(date.isoformat())} · kindle_daily"
-        "</div>"
-    )
+    body = '<div class="colophon">' f"Generated {html.escape(date.isoformat())} · kindle_daily" "</div>"
     return _xhtml_page("colophon.xhtml", "Colophon", body)

@@ -141,31 +141,44 @@ def _compose_cover(im: Image.Image, date: dt.date, count: int) -> Image.Image:
 
     draw = ImageDraw.Draw(im)
     _shadow_text(
-        draw, (COVER_W // 2, 200), "KINDLE  DAILY",
-        font=masthead_font, fill=255, anchor="mm",
+        draw,
+        (COVER_W // 2, 200),
+        "KINDLE  DAILY",
+        font=masthead_font,
+        fill=255,
+        anchor="mm",
     )
     _shadow_text(
-        draw, (COVER_W // 2, 320), date.strftime("%A").upper(),
-        font=date_font, fill=255, anchor="mm",
+        draw,
+        (COVER_W // 2, 320),
+        date.strftime("%A").upper(),
+        font=date_font,
+        fill=255,
+        anchor="mm",
     )
 
     # Bottom block: big issue date + small stats line
     draw.text(
         (COVER_W // 2, COVER_H - 380),
         date.strftime("%B %-d, %Y"),
-        font=issue_font, fill=255, anchor="mm",
+        font=issue_font,
+        fill=255,
+        anchor="mm",
     )
     feed_count_text = f"{count} ARTICLES"
     draw.text(
         (COVER_W // 2, COVER_H - 220),
         feed_count_text,
-        font=sub_font, fill=200, anchor="mm",
+        font=sub_font,
+        fill=200,
+        anchor="mm",
     )
 
     # Hairline rule under the masthead, just for fun
     draw.line(
         [(COVER_W // 2 - 250, 390), (COVER_W // 2 + 250, 390)],
-        fill=255, width=3,
+        fill=255,
+        width=3,
     )
     return im
 

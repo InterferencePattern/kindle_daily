@@ -536,9 +536,7 @@ def _unwrap(element) -> None:
     parent.remove(element)
 
 
-def _rewrite_images_inline(
-    body_html: str, base_url: str, client: httpx.Client
-) -> tuple[str, tuple[ImageAsset, ...]]:
+def _rewrite_images_inline(body_html: str, base_url: str, client: httpx.Client) -> tuple[str, tuple[ImageAsset, ...]]:
     """Download every ``<img>`` in ``body_html`` and rewrite ``src`` to local.
 
     Walks the body in document order. For each ``<img>``:

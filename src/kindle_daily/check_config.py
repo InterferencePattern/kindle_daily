@@ -39,9 +39,7 @@ _REQUIRED = (
 )
 
 
-def validate(
-    env: Mapping[str, str], project_root: Path
-) -> tuple[Config | None, list[str]]:
+def validate(env: Mapping[str, str], project_root: Path) -> tuple[Config | None, list[str]]:
     """Parse and validate ``env`` into a :class:`Config`.
 
     Parameters
@@ -72,25 +70,16 @@ def validate(
     if kindle_email and not _EMAIL_RE.match(kindle_email):
         errors.append(f"KINDLE_EMAIL: {kindle_email!r} doesn't look like an email")
     elif kindle_email and not kindle_email.endswith("@kindle.com"):
-        errors.append(
-            f"KINDLE_EMAIL: {kindle_email!r} must end in @kindle.com "
-            "(the Send-to-Kindle address suffix)"
-        )
+        errors.append(f"KINDLE_EMAIL: {kindle_email!r} must end in @kindle.com " "(the Send-to-Kindle address suffix)")
 
     gmail_user = env.get("KINDLE_DAILY_GMAIL_USER", "")
     if gmail_user and not _EMAIL_RE.match(gmail_user):
-        errors.append(
-            f"KINDLE_DAILY_GMAIL_USER: {gmail_user!r} doesn't look like an email"
-        )
+        errors.append(f"KINDLE_DAILY_GMAIL_USER: {gmail_user!r} doesn't look like an email")
 
     if errors:
         return None, errors
 
-    excluded_categories = tuple(
-        name.strip()
-        for name in env.get("EXCLUDED_CATEGORIES", "").split(",")
-        if name.strip()
-    )
+    excluded_categories = tuple(name.strip() for name in env.get("EXCLUDED_CATEGORIES", "").split(",") if name.strip())
 
     out_dir = project_root / "out"
     config = Config(
@@ -108,9 +97,7 @@ def validate(
     return config, []
 
 
-def _parse_positive_int(
-    env: Mapping[str, str], name: str, *, default: str, errors: list[str]
-) -> int:
+def _parse_positive_int(env: Mapping[str, str], name: str, *, default: str, errors: list[str]) -> int:
     raw = env.get(name, default)
     try:
         value = int(raw)
