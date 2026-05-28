@@ -1,0 +1,222 @@
+/* kindle_daily — magazine-style stylesheet
+ *
+ * Designed for Kindle e-ink. Uses only CSS that Kindle's KF8/EPUB renderer
+ * supports reliably: type sizes, weights, small-caps, letter-spacing, simple
+ * borders, drop caps via :first-letter, and italic block quotes.
+ */
+
+body {
+    font-family: "Bookerly", "Caecilia", Georgia, "Times New Roman", serif;
+    font-size: 1em;
+    line-height: 1.45;
+    margin: 0.6em 0.4em;
+}
+
+/* ---------- cover ---------- */
+
+.cover {
+    text-align: center;
+    margin: 0 0.4em;
+}
+.cover .masthead {
+    font-family: Georgia, "Times New Roman", serif;
+    font-weight: 700;
+    font-size: 4em;
+    line-height: 1.05;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    margin-top: 28%;
+    margin-bottom: 0.4em;
+}
+.cover .rule {
+    width: 40%;
+    margin: 0.8em auto;
+    border: 0;
+    border-top: 2px solid #000;
+    height: 0;
+}
+.cover .date {
+    font-family: Georgia, "Times New Roman", serif;
+    font-style: italic;
+    font-size: 1.5em;
+    margin: 1em 0 0 0;
+}
+.cover .ornament {
+    font-size: 1.1em;
+    letter-spacing: 0.7em;
+    margin: 3em 0 5em 0;
+    color: #444;
+}
+.cover .stats {
+    font-family: "Helvetica", "Arial", sans-serif;
+    font-size: 0.85em;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+}
+
+/* ---------- contents page ---------- */
+
+.contents h1 {
+    font-family: "Helvetica", "Arial", sans-serif;
+    font-weight: 700;
+    font-size: 1.6em;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    text-align: center;
+    border-bottom: 1px solid #000;
+    padding-bottom: 0.3em;
+    margin-bottom: 1.2em;
+}
+.contents .section-name {
+    font-family: "Helvetica", "Arial", sans-serif;
+    font-weight: 700;
+    font-size: 1.05em;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-top: 1.4em;
+    margin-bottom: 0.4em;
+    border-bottom: 1px solid #888;
+    padding-bottom: 0.15em;
+}
+.contents .toc-entry {
+    margin: 0.55em 0;
+    padding-left: 0.5em;
+}
+.contents .toc-entry .kicker {
+    display: block;
+    font-family: "Helvetica", "Arial", sans-serif;
+    font-size: 0.7em;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #555;
+}
+.contents .toc-entry .toc-title {
+    font-size: 1.05em;
+    text-decoration: none;
+    color: #000;
+}
+.contents .toc-entry .meta {
+    font-size: 0.75em;
+    color: #777;
+    font-style: italic;
+}
+
+/* ---------- section opener ---------- */
+
+.section-opener {
+    text-align: center;
+    margin-top: 30%;
+    padding: 1em 0;
+    border-top: 2px solid #000;
+    border-bottom: 2px solid #000;
+}
+.section-opener h1 {
+    font-family: "Helvetica", "Arial", sans-serif;
+    font-weight: 700;
+    font-size: 2.2em;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin: 0.4em 0;
+}
+
+/* ---------- article ---------- */
+
+.article .kicker {
+    font-family: "Helvetica", "Arial", sans-serif;
+    font-size: 0.75em;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #555;
+    margin-bottom: 0.3em;
+}
+.article h1 {
+    font-family: Georgia, "Times New Roman", serif;
+    font-weight: 700;
+    font-size: 1.8em;
+    line-height: 1.15;
+    margin: 0 0 0.4em 0;
+}
+.article .byline {
+    font-style: italic;
+    font-size: 0.9em;
+    color: #555;
+    margin-bottom: 1em;
+    border-bottom: 1px solid #ccc;
+    padding-bottom: 0.6em;
+}
+.article .body {
+    text-align: justify;
+}
+.article .body p {
+    margin: 0 0 0.7em 0;
+    text-indent: 1.2em;
+}
+.article .body p.first,
+.article .body > p:first-of-type {
+    text-indent: 0;
+}
+.article .body > p:first-of-type:first-letter {
+    font-size: 3em;
+    font-weight: 700;
+    float: left;
+    line-height: 0.9;
+    padding: 0.05em 0.08em 0 0;
+}
+.article .body blockquote {
+    margin: 0.8em 0.5em;
+    padding-left: 0.8em;
+    border-left: 3px solid #888;
+    font-style: italic;
+    color: #444;
+}
+.article .body h2,
+.article .body h3 {
+    font-family: Georgia, serif;
+    font-weight: 700;
+    margin-top: 1.2em;
+}
+.article .body a {
+    color: #000;
+    text-decoration: underline;
+}
+.article .body img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 0.8em auto;
+}
+.article .body figure {
+    margin: 1em 0;
+    text-align: center;
+}
+.article .body figure img {
+    margin: 0 auto;
+}
+.article .body figcaption {
+    font-family: "Helvetica", "Arial", sans-serif;
+    font-size: 0.8em;
+    color: #555;
+    margin-top: 0.3em;
+    text-align: center;
+}
+.article .source {
+    margin-top: 1.5em;
+    padding-top: 0.5em;
+    border-top: 1px solid #ccc;
+    font-size: 0.75em;
+    color: #777;
+}
+.article .source a {
+    color: #777;
+}
+
+/* ---------- colophon ---------- */
+
+.colophon {
+    text-align: center;
+    margin-top: 30%;
+    font-size: 0.85em;
+    color: #777;
+    font-style: italic;
+}

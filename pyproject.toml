@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kindle_daily"
+version = "0.1.0"
+description = "Daily FreshRSS-to-Kindle magazine via Send-to-Kindle email."
+requires-python = ">=3.10"
+authors = [{ name = "Jim Budarz" }]
+dependencies = [
+    "httpx>=0.27",
+    "trafilatura>=1.12",
+    "ebooklib>=0.18",
+    "python-dotenv>=1.0",
+    "lxml>=5.0",
+    "pillow>=10.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-httpx>=0.30",
+    "black>=24.0",
+]
+
+[project.scripts]
+kindle-daily = "kindle_daily.main:cli"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"kindle_daily" = ["assets/*.css"]
+
+[tool.black]
+line-length = 88
+target-version = ["py310"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
