@@ -201,6 +201,11 @@ def _fetch_one(item: FeedItem) -> Article | None:
         return None
 
     body_html = _strip_duplicate_title(body_html, item.title)
+    body_html = _strip_subscription_cta(body_html)
+    body_html = _sanitize_html(body_html, item.url)
+    if not body_html:
+        log.warning("body empty after sanitizing %s; skipping", item.url or item.title)
+        return None
     with httpx.Client(timeout=IMG_DOWNLOAD_TIMEOUT_S, follow_redirects=True) as client:
         body_html, images = _rewrite_images_inline(body_html, item.url, client)
     word_count = _word_count(body_html)
@@ -220,20 +225,10 @@ def _fetch_one(item: FeedItem) -> Article | None:
 def _word_count(html: str) -> int:
     """Rough word count of an HTML fragment.
 
-    Strips tags by character class — good enough for a reading-time estimate.
+    Strips tags, then splits on whitespace — good enough for a reading-time
+    estimate.
     """
-    in_tag = False
-    chars: list[str] = []
-    for ch in html:
-        if ch == "<":
-            in_tag = True
-            chars.append(" ")
-        elif ch == ">":
-            in_tag = False
-            chars.append(" ")
-        elif not in_tag:
-            chars.append(ch)
-    return len("".join(chars).split())
+    return len(re.sub(r"<[^>]+>", " ", html).split())
 
 
 # --------------------------------------------------- truncation detection
@@ -331,6 +326,71 @@ def _strip_duplicate_title(body_html: str, title: str) -> str:
     return out
 
 
+# --------------------------------------------------- subscription CTA strip
+
+# Recognisable solicitation constructs, not tied to one publisher. Each is an
+# action verb bound to a media-support object, so they fire on subscribe/donate
+# CTAs across feeds but not on prose that merely mentions "subscribe".
+_SUBSCRIPTION_CTA_RE = re.compile(
+    r"support\w*\s+(?:our|its|independent|quality|local|nonprofit|award)"
+    r"|by\s+(?:purchasing|buying)\s+an?\s+subscription"
+    r"|consider\s+(?:subscrib|support|donat)"
+    r"|subscrib\w*\s+(?:today|now)"
+    r"|sign\s+up\s+for\s+(?:our|the)\b.*newsletter"
+    r"|become\s+a\s+(?:member|subscriber|supporter)"
+    r"|donate\s+(?:today|now)",
+    re.IGNORECASE,
+)
+# Words that mark a short heading as the promo's lead-in (e.g. SciAm's
+# "On supporting science journalism"), removed only when it directly precedes a
+# matched CTA paragraph — so real section headings are left alone.
+_CTA_HEADING_WORDS = ("subscrib", "support", "donat", "member", "newsletter", "journalism")
+
+
+def _strip_subscription_cta(body_html: str) -> str:
+    """Drop subscribe/donate solicitation blocks embedded in article bodies.
+
+    Some publishers (e.g. Scientific American) inject a "support our journalism"
+    promo into the body content stream as an unstyled heading + paragraph, with
+    no class or container to target. trafilatura treats it as article text and
+    keeps it. We match the paragraph by its solicitation phrasing and, if the
+    element immediately before it is a short promo lead-in heading, drop that
+    too. The match is on phrasing common across publishers, not a single
+    publisher's exact text.
+
+    ponytail: text heuristic — the upstream HTML carries no structural marker,
+    so phrasing is the only signal. Tune _SUBSCRIPTION_CTA_RE if a real
+    paragraph gets eaten or a new CTA wording slips through.
+    """
+    if "<p" not in body_html.lower():
+        return body_html
+
+    try:
+        root = lxml_html.fragment_fromstring(body_html, create_parent="div")
+    except (lxml_html.etree.ParserError, ValueError):
+        return body_html
+
+    removed = False
+    for p in root.xpath(".//p"):
+        if not _SUBSCRIPTION_CTA_RE.search(_normalize("".join(p.itertext()))):
+            continue
+        prev = p.getprevious()
+        if prev is not None and prev.tag in ("h2", "h3", "h4"):
+            heading = _normalize("".join(prev.itertext()))
+            if len(heading.split()) <= 10 and any(w in heading for w in _CTA_HEADING_WORDS):
+                _drop(prev)
+        _drop(p)
+        removed = True
+
+    if not removed:
+        return body_html
+
+    out = lxml_html.tostring(root, encoding="unicode", method="html")
+    if out.startswith("<div>") and out.endswith("</div>"):
+        out = out[len("<div>") : -len("</div>")]
+    return out
+
+
 def _normalize(s: str) -> str:
     """Lowercase, replace nbsp with space, collapse internal whitespace."""
     return " ".join(s.replace("\xa0", " ").lower().split())
@@ -349,6 +409,24 @@ def _drop(element) -> None:
         else:
             parent.text = (parent.text or "") + tail
     parent.remove(element)
+
+
+# Trafilatura emits an image's caption as a plain <p> sibling right after it
+# (e.g. "Photo credit: ..."), not a <figcaption>. Dropping the image alone
+# orphans that caption — and galleries that exceed MAX_IMAGES_PER_ARTICLE leave
+# a run of orphaned, often-identical caption lines. So drop the caption too.
+# Guard on length so we never eat a real body paragraph that merely follows an
+# inline image; captions are short.
+_CAPTION_MAX_WORDS = 30
+
+
+def _drop_with_caption(img) -> None:
+    """Drop an ``<img>`` plus an immediately-following short caption ``<p>``."""
+    nxt = img.getnext()
+    if nxt is not None and isinstance(nxt.tag, str) and nxt.tag == "p":
+        if len("".join(nxt.itertext()).split()) < _CAPTION_MAX_WORDS:
+            _drop(nxt)
+    _drop(img)
 
 
 # ----------------------------------------------------------------- images
@@ -396,8 +474,8 @@ def _html_from_trafilatura_xml(xml_body: str) -> str:
     Trafilatura's XML preserves images inline as ``<graphic src=...>``
     along with TEI-ish tags (``<head>``, ``<p>``, ``<list>``, ``<item>``,
     ``<hi>``, ``<quote>``, ``<row>``, ``<cell>``, ``<ref>``, ``<lb/>``)
-    that we map to plain HTML equivalents. Unknown tags are unwrapped —
-    their text content survives but the tag itself is dropped.
+    that we map to plain HTML equivalents. Unknown tags are left in place;
+    :func:`_sanitize_html` unwraps them later.
 
     Returns an empty string if the input is empty or unparseable.
     """
@@ -451,52 +529,142 @@ def _html_from_trafilatura_xml(xml_body: str) -> str:
             el.tag = _TRAFILATURA_TAG_RENAMES[tag]
             el.attrib.clear()
             continue
-        # Drop empty <graphic/> with no src already handled above; any
-        # other unknown tag gets unwrapped after the rename pass.
+        # Any other unknown tag is unwrapped later by _sanitize_html.
 
-    # Unwrap any remaining tags that aren't valid HTML (e.g. <main>, <doc>,
-    # plus stray TEI tags we didn't enumerate). We do this after renames so
-    # renamed-but-still-existing parents aren't mistakenly unwrapped.
-    _ALLOWED_HTML_TAGS = {
+    out = lxml_html.tostring(root, encoding="unicode", method="html")
+    if out.startswith("<kdroot>") and out.endswith("</kdroot>"):
+        out = out[len("<kdroot>") : -len("</kdroot>")]
+    return out
+
+
+# ---------------------------------------------------------------- sanitize
+
+# Tags kept as-is. Everything else is unwrapped (text survives, tag goes).
+# Kindle's reflowable renderer silently falls back to fixed layout (E016) on
+# markup it can't reflow, so only plain document tags get through.
+_ALLOWED_HTML_TAGS = frozenset(
+    {
         "a",
+        "abbr",
+        "b",
         "blockquote",
         "br",
+        "caption",
+        "cite",
         "code",
+        "dd",
         "div",
+        "dl",
+        "dt",
         "em",
-        "figure",
         "figcaption",
+        "figure",
+        "h1",
         "h2",
         "h3",
         "h4",
         "h5",
         "h6",
+        "hr",
+        "i",
         "img",
         "li",
         "ol",
         "p",
         "pre",
+        "q",
+        "s",
+        "small",
         "span",
         "strong",
+        "sub",
+        "sup",
         "table",
         "tbody",
         "td",
         "th",
         "thead",
         "tr",
+        "u",
         "ul",
     }
+)
+
+# Tags removed together with their content: media/embeds Kindle can't render
+# (an empty podcast <audio> is enough to trigger E016), plus code and forms
+# whose inner text would be junk if unwrapped.
+_DROPPED_HTML_TAGS = frozenset(
+    {
+        "audio",
+        "button",
+        "canvas",
+        "embed",
+        "form",
+        "iframe",
+        "input",
+        "math",
+        "noscript",
+        "object",
+        "script",
+        "select",
+        "style",
+        "svg",
+        "template",
+        "textarea",
+        "video",
+    }
+)
+
+_LINK_SCHEMES = ("http://", "https://", "mailto:")
+
+
+def _sanitize_html(body_html: str, base_url: str) -> str:
+    """Reduce an article body to Kindle-safe HTML.
+
+    Runs on every body, whether it came from the FreshRSS summary or from
+    trafilatura, so the EPUB never depends on what a feed happened to send.
+
+    Parameters
+    ----------
+    body_html : str
+        Article body HTML fragment.
+    base_url : str
+        Article URL, used to resolve relative ``href`` values. Links that
+        can't be made absolute ``http(s)``/``mailto`` lose their ``href``.
+
+    Returns
+    -------
+    str
+        The sanitized fragment, or ``""`` if it couldn't be parsed.
+    """
+    if not body_html or not body_html.strip():
+        return ""
+    try:
+        root = lxml_html.fragment_fromstring(body_html, create_parent="div")
+    except (lxml_html.etree.ParserError, ValueError) as exc:
+        log.warning("could not parse body for %s: %s", base_url, exc)
+        return ""
+
+    for el in list(root.iter(*_DROPPED_HTML_TAGS)):
+        _drop(el)
+
     for el in list(root.iter()):
-        if not isinstance(el.tag, str):
-            continue
-        if el is root:
+        if el is root or not isinstance(el.tag, str):
             continue
         if el.tag not in _ALLOWED_HTML_TAGS:
             _unwrap(el)
 
+    for a in root.iter("a"):
+        href = (a.get("href") or "").strip()
+        absolute = urljoin(base_url, href) if base_url and href else href
+        if absolute.lower().startswith(_LINK_SCHEMES):
+            a.set("href", absolute)
+        else:
+            a.attrib.pop("href", None)
+
     out = lxml_html.tostring(root, encoding="unicode", method="html")
-    if out.startswith("<kdroot>") and out.endswith("</kdroot>"):
-        out = out[len("<kdroot>") : -len("</kdroot>")]
+    if out.startswith("<div>") and out.endswith("</div>"):
+        out = out[len("<div>") : -len("</div>")]
     return out
 
 
@@ -536,7 +704,9 @@ def _unwrap(element) -> None:
     parent.remove(element)
 
 
-def _rewrite_images_inline(body_html: str, base_url: str, client: httpx.Client) -> tuple[str, tuple[ImageAsset, ...]]:
+def _rewrite_images_inline(
+    body_html: str, base_url: str, client: httpx.Client
+) -> tuple[str, tuple[ImageAsset, ...]]:
     """Download every ``<img>`` in ``body_html`` and rewrite ``src`` to local.
 
     Walks the body in document order. For each ``<img>``:
@@ -569,17 +739,17 @@ def _rewrite_images_inline(body_html: str, base_url: str, client: httpx.Client) 
     for img in list(root.iter("img")):
         absolute = _resolve_img_src(img, base_url)
         if not absolute:
-            _drop(img)
+            _drop_with_caption(img)
             continue
         if len(assets) >= MAX_IMAGES_PER_ARTICLE and absolute not in seen_source:
-            _drop(img)
+            _drop_with_caption(img)
             continue
 
         local_name = seen_source.get(absolute)
         if local_name is None:
             asset = _download_and_optimize(client, absolute)
             if asset is None:
-                _drop(img)
+                _drop_with_caption(img)
                 continue
             local_name = asset.local_name
             seen_source[absolute] = local_name

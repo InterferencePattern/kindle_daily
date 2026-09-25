@@ -7,6 +7,8 @@ from kindle_daily.fetcher import (
     _fetch_one,
     _html_from_trafilatura_xml,
     _rewrite_images_inline,
+    _sanitize_html,
+    _strip_subscription_cta,
     _summary_appears_truncated,
     _word_count,
     fetch_all,
@@ -182,6 +184,38 @@ def test_word_count_strips_tags():
     assert _word_count("") == 0
 
 
+def test_strip_subscription_cta_removes_promo_and_lead_in():
+    # Mirrors SciAm's post-trafilatura shape: a short lead-in <h2> + CTA <p>,
+    # wedged between real article paragraphs and a real section heading.
+    body = (
+        "<p>Real paragraph one with actual content.</p>"
+        '<h2>On supporting science journalism</h2>'
+        "<p>If you're enjoying this article, consider supporting our "
+        'award-winning journalism by <a href="/sub/">subscribing</a>. By '
+        "purchasing a subscription you are helping to ensure the future of "
+        "impactful stories.</p>"
+        "<h2>The Real Next Section</h2>"
+        "<p>Real paragraph two.</p>"
+    )
+    out = _strip_subscription_cta(body)
+    assert "award-winning" not in out
+    assert "supporting science journalism" not in out.lower()
+    # real content untouched
+    assert "Real paragraph one" in out
+    assert "The Real Next Section" in out
+    assert "Real paragraph two" in out
+
+
+def test_strip_subscription_cta_keeps_prose_about_subscriptions():
+    # A real paragraph that merely mentions subscribing must survive — the
+    # regex targets solicitation constructs, not the word "subscribe".
+    body = (
+        "<p>The newspaper lost subscribers last year as readers cancelled "
+        "their print subscriptions in favour of streaming.</p>"
+    )
+    assert _strip_subscription_cta(body) == body
+
+
 # ----------------------------------------------- trafilatura XML translator
 
 
@@ -206,8 +240,8 @@ def test_html_from_xml_maps_trafilatura_tags():
         '<p>see <ref target="https://x/y">here</ref><lb/>line two</p>'
         "</main>"
     )
-    out = _html_from_trafilatura_xml(xml)
-    # <main> dropped; <head rend="h1"> -> <h2>
+    out = _sanitize_html(_html_from_trafilatura_xml(xml), "")
+    # <main> unwrapped by the sanitizer; <head rend="h1"> -> <h2>
     assert "<main" not in out
     assert "<h2>Title</h2>" in out
     # <hi> -> <em>/<strong>
@@ -225,12 +259,53 @@ def test_html_from_xml_maps_trafilatura_tags():
     assert "<br>" in out
 
 
-def test_html_from_xml_drops_unknown_tags_but_keeps_text():
-    xml = "<weirdtag>kept</weirdtag><p>body</p>"
-    out = _html_from_trafilatura_xml(xml)
+# ----------------------------------------------------------- sanitizer
+
+
+def test_sanitize_unwraps_unknown_tags_but_keeps_text():
+    out = _sanitize_html("<weirdtag>kept</weirdtag><p>body</p>", "")
     assert "weirdtag" not in out
     assert "kept" in out
     assert "<p>body</p>" in out
+
+
+def test_sanitize_drops_media_and_script_with_content():
+    # The Stratechery podcast player that triggered Kindle's E016 fallback.
+    body = (
+        '<div><audio controls="controls" preload="none"/></div>'
+        "<p>a</p><script>var x = 1;</script>"
+        '<iframe src="https://yt.test/embed">fallback</iframe><p>b</p>'
+    )
+    out = _sanitize_html(body, "")
+    for gone in ("audio", "script", "var x", "iframe", "fallback"):
+        assert gone not in out
+    assert "<p>a</p>" in out and "<p>b</p>" in out
+
+
+def test_sanitize_makes_links_absolute_and_drops_unusable_hrefs():
+    body = (
+        '<p><a href="/getsciam/">sub</a> <a href="javascript:void(0)">js</a> '
+        '<a href="mailto:x@y.test">mail</a></p>'
+    )
+    out = _sanitize_html(body, "https://www.sciam.test/article/x/")
+    assert 'href="https://www.sciam.test/getsciam/"' in out
+    assert "javascript" not in out
+    assert "<a>js</a>" in out
+    assert 'href="mailto:x@y.test"' in out
+
+
+def test_sanitize_empty_input():
+    assert _sanitize_html("", "") == ""
+    assert _sanitize_html("   ", "") == ""
+
+
+def test_fetcher_sanitizes_full_text_rss_body(monkeypatch):
+    # The RSS-body path skips trafilatura; it must still be sanitized.
+    body = "<p>" + "word " * 400 + "</p><audio controls/>"
+    item = _make_item(url="https://x.test/a", summary=body)
+    art = _fetch_one(item)
+    assert art is not None
+    assert "audio" not in art.body_html
 
 
 # ----------------------------------------------- inline image rewriter
@@ -278,9 +353,14 @@ def test_rewrite_images_inline_rewrites_src_and_drops_failures(monkeypatch):
 def test_rewrite_images_inline_caps_at_max_per_article(monkeypatch):
     import kindle_daily.fetcher as fetcher_mod
 
-    monkeypatch.setattr(fetcher_mod, "_download_and_optimize", lambda _c, u: _fake_asset(u))
+    monkeypatch.setattr(
+        fetcher_mod, "_download_and_optimize", lambda _c, u: _fake_asset(u)
+    )
 
-    imgs = "".join(f'<img src="https://x.test/img-{i}.jpg"/>' for i in range(fetcher_mod.MAX_IMAGES_PER_ARTICLE + 3))
+    imgs = "".join(
+        f'<img src="https://x.test/img-{i}.jpg"/>'
+        for i in range(fetcher_mod.MAX_IMAGES_PER_ARTICLE + 3)
+    )
     out, assets = _rewrite_images_inline(imgs, "https://x.test/", client=None)
     assert len(assets) == fetcher_mod.MAX_IMAGES_PER_ARTICLE
     # Over-cap images are dropped from the HTML so Kindle doesn't show
@@ -318,8 +398,13 @@ def test_rewrite_images_inline_resolves_relative_and_lazy(monkeypatch):
 
     monkeypatch.setattr(fetcher_mod, "_download_and_optimize", fake_download)
 
-    body = '<img src="data:image/gif;base64,xxx" data-src="/lazy.jpg"/>' '<img src="../up.jpg"/>'
-    _out, assets = _rewrite_images_inline(body, "https://x.test/section/article", client=None)
+    body = (
+        '<img src="data:image/gif;base64,xxx" data-src="/lazy.jpg"/>'
+        '<img src="../up.jpg"/>'
+    )
+    _out, assets = _rewrite_images_inline(
+        body, "https://x.test/section/article", client=None
+    )
     # data: URL ignored; lazy-load attribute picked up
     assert captured[0] == "https://x.test/lazy.jpg"
     # relative URL resolved against base
@@ -330,10 +415,39 @@ def test_rewrite_images_inline_resolves_relative_and_lazy(monkeypatch):
 def test_rewrite_images_inline_skips_noise_substrings(monkeypatch):
     import kindle_daily.fetcher as fetcher_mod
 
-    monkeypatch.setattr(fetcher_mod, "_download_and_optimize", lambda _c, u: _fake_asset(u))
+    monkeypatch.setattr(
+        fetcher_mod, "_download_and_optimize", lambda _c, u: _fake_asset(u)
+    )
 
-    body = '<img src="https://x.test/logo.png"/>' '<img src="https://x.test/photo.jpg"/>'
+    body = (
+        '<img src="https://x.test/logo.png"/>' '<img src="https://x.test/photo.jpg"/>'
+    )
     out, assets = _rewrite_images_inline(body, "https://x.test/", client=None)
     assert len(assets) == 1
     assert assets[0].source_url.endswith("photo.jpg")
     assert "logo.png" not in out
+
+
+def test_rewrite_images_inline_drops_orphaned_caption_with_image(monkeypatch):
+    import kindle_daily.fetcher as fetcher_mod
+
+    monkeypatch.setattr(
+        fetcher_mod, "_download_and_optimize", lambda _c, u: _fake_asset(u)
+    )
+
+    # A gallery exceeding the cap, each image followed by an identical caption <p>.
+    # Dropped images must take their caption with them — no orphaned repetition.
+    n = fetcher_mod.MAX_IMAGES_PER_ARTICLE + 4
+    body = "".join(
+        f'<img src="https://x.test/g-{i}.jpg"/><p>Photo credit: Someone</p>'
+        for i in range(n)
+    )
+    out, assets = _rewrite_images_inline(body, "https://x.test/", client=None)
+    assert len(assets) == fetcher_mod.MAX_IMAGES_PER_ARTICLE
+    # One caption survives per kept image; the over-cap captions are gone.
+    assert out.count("Photo credit: Someone") == fetcher_mod.MAX_IMAGES_PER_ARTICLE
+    # A long paragraph after a dropped image is NOT mistaken for a caption.
+    long_p = "<p>" + " ".join(["word"] * 40) + "</p>"
+    body2 = "".join(f'<img src="https://x.test/h-{i}.jpg"/>' for i in range(n)) + long_p
+    out2, _ = _rewrite_images_inline(body2, "https://x.test/", client=None)
+    assert "word word" in out2

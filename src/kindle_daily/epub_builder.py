@@ -22,7 +22,7 @@ import html
 import logging
 from collections import OrderedDict
 from importlib import resources
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from urllib.parse import urlparse
 
 from ebooklib import epub
@@ -167,7 +167,9 @@ def _add_image_assets(book: epub.EpubBook, articles: list[Article]) -> None:
             seen.add(asset.local_name)
             book.add_item(
                 epub.EpubItem(
-                    uid=f"img-{asset.local_name}",
+                    # local_name is "images/<hex>.jpg"; '/' isn't legal in an
+                    # XML id, so key the manifest id off the hex stem.
+                    uid=f"img-{PurePosixPath(asset.local_name).stem}",
                     file_name=asset.local_name,
                     media_type=asset.media_type,
                     content=asset.data,

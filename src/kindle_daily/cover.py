@@ -2,7 +2,7 @@
 
 Picks the largest hero image among the day's articles, re-downloads it at
 full resolution, center-crops to portrait, converts to greyscale, and
-overlays the masthead, weekday, date, and article count.
+overlays the masthead, category roster, date, and article count.
 
 The cover is registered with ``book.set_cover()`` so the Kindle home screen
 shows it as the issue's thumbnail and Kindle's reader renders it as the

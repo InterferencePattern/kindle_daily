@@ -7,12 +7,15 @@ page, and the stylesheet is referenced.
 
 from __future__ import annotations
 
+import dataclasses
 import datetime as dt
+import re
 import zipfile
 
 from ebooklib import epub
 
 from kindle_daily import epub_builder
+from kindle_daily.fetcher import ImageAsset
 
 
 def test_build_produces_valid_epub_with_full_navigation(tmp_path, articles):
@@ -89,3 +92,26 @@ def test_build_with_part_adds_part_suffix_to_title_and_filename(tmp_path, articl
     assert out.name == "kindle_daily_2026-05-07_part2of3.epub"
     book = epub.read_epub(str(out))
     assert "Kindle Daily Part 2 — Thursday, May 7, 2026" == book.title
+
+
+def test_build_manifest_ids_are_valid_xml_names(tmp_path, articles):
+    # "img-images/abc.jpg" style ids fail epubcheck (RSC-005).
+    asset = ImageAsset(
+        local_name="images/0123456789abcdef.jpg",
+        media_type="image/jpeg",
+        data=b"\xff\xd8\xff",
+    )
+    articles[0] = dataclasses.replace(
+        articles[0],
+        body_html=articles[0].body_html + f'<img src="{asset.local_name}" alt=""/>',
+        images=(asset,),
+    )
+    out = epub_builder.build(articles, date=dt.date(2026, 5, 5), out_dir=tmp_path)
+
+    with zipfile.ZipFile(out) as zf:
+        opf = zf.read("EPUB/content.opf").decode()
+        assert "EPUB/images/0123456789abcdef.jpg" in zf.namelist()
+    ids = re.findall(r'<item [^>]*\bid="([^"]*)"', opf)
+    assert "img-0123456789abcdef" in ids
+    for item_id in ids:
+        assert re.fullmatch(r"[A-Za-z_][\w.-]*", item_id), item_id
