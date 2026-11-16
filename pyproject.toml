@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "kindle_daily"
 version = "0.1.0"
 description = "Daily FreshRSS-to-Kindle magazine via Send-to-Kindle email."
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = [{ name = "Jim Budarz" }]
 dependencies = [
     "httpx>=0.27",
@@ -22,6 +22,8 @@ dev = [
     "pytest>=8.0",
     "pytest-httpx>=0.30",
     "black>=24.0",
+    "ruff>=0.8",
+    "pre-commit>=4.0",
 ]
 
 [project.scripts]
@@ -35,7 +37,17 @@ where = ["src"]
 
 [tool.black]
 line-length = 88
-target-version = ["py310"]
+target-version = ["py311"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+
+[tool.ruff.lint]
+# E/F: pycodestyle+pyflakes, I: isort, UP: pyupgrade, B: bugbear,
+# SIM: simplify, PTH: pathlib, G: lazy %-style logging (no f-strings in log calls)
+select = ["E", "F", "I", "UP", "B", "SIM", "PTH", "G"]
+ignore = ["E501"]  # Black owns line length
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

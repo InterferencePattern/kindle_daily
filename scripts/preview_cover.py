@@ -16,11 +16,10 @@ import io
 import logging
 import sys
 import time
-from pathlib import Path
 
 import httpx
 import trafilatura
-from PIL import Image, ImageDraw, ImageFont, ImageFilter
+from PIL import Image, ImageDraw, ImageFont
 
 from kindle_daily.config import load_config
 from kindle_daily.fetcher import _harvest_image_urls
@@ -53,19 +52,18 @@ def main() -> int:
     # which is what the cover would actually use. Skipping the full extra-image
     # harvest because we only need one good photo.
     candidates: list[str] = []
-    with httpx.Client(timeout=10, follow_redirects=True) as net:
-        for item in items:
-            if not item.url:
-                continue
-            try:
-                downloaded = trafilatura.fetch_url(item.url)
-            except Exception:
-                continue
-            if not downloaded:
-                continue
-            urls = _harvest_image_urls(downloaded, item.url)
-            if urls:
-                candidates.append(urls[0])
+    for item in items:
+        if not item.url:
+            continue
+        try:
+            downloaded = trafilatura.fetch_url(item.url)
+        except Exception:
+            continue
+        if not downloaded:
+            continue
+        urls = _harvest_image_urls(downloaded, item.url)
+        if urls:
+            candidates.append(urls[0])
     log.info("got %d candidate hero URLs", len(candidates))
 
     best_image = _pick_largest(candidates)

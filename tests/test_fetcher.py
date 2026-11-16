@@ -209,7 +209,7 @@ def test_strip_subscription_cta_removes_promo_and_lead_in():
     # wedged between real article paragraphs and a real section heading.
     body = (
         "<p>Real paragraph one with actual content.</p>"
-        '<h2>On supporting science journalism</h2>'
+        "<h2>On supporting science journalism</h2>"
         "<p>If you're enjoying this article, consider supporting our "
         'award-winning journalism by <a href="/sub/">subscribing</a>. By '
         "purchasing a subscription you are helping to ensure the future of "
