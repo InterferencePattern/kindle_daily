@@ -1,4 +1,18 @@
-# kindle_daily
+# 📰 kindle_daily
+
+**Your RSS backlog, delivered to your Kindle as a morning newspaper.**
+
+<p align="center">
+  <img src="docs/screenshots/cover.png" alt="Cover page with masthead, date and article count" height="360">
+  &nbsp;
+  <img src="docs/screenshots/contents.png" alt="Contents page grouped by FreshRSS category" height="360">
+  &nbsp;
+  <img src="docs/screenshots/article.png" alt="Article page with byline, read time, hero image and drop cap" height="360">
+</p>
+<p align="center"><sub>Cover · contents by category · article. Sample issue built by the real pipeline from
+<a href="https://www.privacyguides.org/">Privacy Guides</a> (CC BY-SA 4.0),
+<a href="https://guardianproject.info/blog/">Guardian Project</a> (CC BY) and
+<a href="https://www.home-assistant.io/blog/">Home Assistant</a> (CC BY-NC-SA 4.0); photo via Unsplash.</sub></p>
 
 A daily Python job that turns your FreshRSS unread queue into a magazine-style
 EPUB and emails it to your Kindle's Send-to-Kindle address. The Kindle picks it
