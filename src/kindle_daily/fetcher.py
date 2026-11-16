@@ -18,7 +18,7 @@ import logging
 import re
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin
 
 import httpx
 import trafilatura
@@ -357,7 +357,14 @@ _SUBSCRIPTION_CTA_RE = re.compile(
 # Words that mark a short heading as the promo's lead-in (e.g. SciAm's
 # "On supporting science journalism"), removed only when it directly precedes a
 # matched CTA paragraph — so real section headings are left alone.
-_CTA_HEADING_WORDS = ("subscrib", "support", "donat", "member", "newsletter", "journalism")
+_CTA_HEADING_WORDS = (
+    "subscrib",
+    "support",
+    "donat",
+    "member",
+    "newsletter",
+    "journalism",
+)
 
 
 def _strip_subscription_cta(body_html: str) -> str:
@@ -390,7 +397,9 @@ def _strip_subscription_cta(body_html: str) -> str:
         prev = p.getprevious()
         if prev is not None and prev.tag in ("h2", "h3", "h4"):
             heading = _normalize("".join(prev.itertext()))
-            if len(heading.split()) <= 10 and any(w in heading for w in _CTA_HEADING_WORDS):
+            if len(heading.split()) <= 10 and any(
+                w in heading for w in _CTA_HEADING_WORDS
+            ):
                 _drop(prev)
         _drop(p)
         removed = True
@@ -436,9 +445,13 @@ _CAPTION_MAX_WORDS = 30
 def _drop_with_caption(img) -> None:
     """Drop an ``<img>`` plus an immediately-following short caption ``<p>``."""
     nxt = img.getnext()
-    if nxt is not None and isinstance(nxt.tag, str) and nxt.tag == "p":
-        if len("".join(nxt.itertext()).split()) < _CAPTION_MAX_WORDS:
-            _drop(nxt)
+    if (
+        nxt is not None
+        and isinstance(nxt.tag, str)
+        and nxt.tag == "p"
+        and len("".join(nxt.itertext()).split()) < _CAPTION_MAX_WORDS
+    ):
+        _drop(nxt)
     _drop(img)
 
 

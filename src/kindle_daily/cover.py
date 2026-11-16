@@ -16,8 +16,8 @@ from __future__ import annotations
 import datetime as dt
 import io
 import logging
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 import httpx
 from PIL import Image, ImageDraw, ImageFont
@@ -113,7 +113,9 @@ def _render_cover(
         return None
 
     try:
-        with httpx.Client(timeout=COVER_DOWNLOAD_TIMEOUT_S, follow_redirects=True) as client:
+        with httpx.Client(
+            timeout=COVER_DOWNLOAD_TIMEOUT_S, follow_redirects=True
+        ) as client:
             resp = client.get(hero_url)
             resp.raise_for_status()
         im = Image.open(io.BytesIO(resp.content))
@@ -307,7 +309,9 @@ def _shadow_text(
     draw.text(xy, text, font=font, fill=255, anchor=anchor)
 
 
-def _load_font(candidates: list[tuple[str, int]], size: int) -> ImageFont.FreeTypeFont | None:
+def _load_font(
+    candidates: list[tuple[str, int]], size: int
+) -> ImageFont.FreeTypeFont | None:
     """Try each (path, ttc-index) until one loads. Return ``None`` if none do."""
     for path, idx in candidates:
         if not Path(path).exists():

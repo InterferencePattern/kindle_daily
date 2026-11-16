@@ -24,9 +24,8 @@ caller's first slice of articles. In category-boundary mode, Parts follow
 from __future__ import annotations
 
 import math
-from collections import OrderedDict
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from .fetcher import Article
 
@@ -176,9 +175,9 @@ def _fits(articles: list[Article], build_fn: BuildFn, size_cap_bytes: int) -> bo
     return build_fn(articles).stat().st_size <= size_cap_bytes
 
 
-def _group_by_category(articles: list[Article]) -> "OrderedDict[str, list[Article]]":
+def _group_by_category(articles: list[Article]) -> dict[str, list[Article]]:
     """Group ``articles`` by Category, preserving each Category's order."""
-    groups: OrderedDict[str, list[Article]] = OrderedDict()
+    groups: dict[str, list[Article]] = {}
     for article in articles:
         groups.setdefault(article.category, []).append(article)
     return groups

@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
-
-import pytest
 
 from kindle_daily.chunker import split
 from kindle_daily.fetcher import Article
@@ -138,7 +136,9 @@ def test_order_preserved_across_chunks(tmp_path):
     arts = [_article(i) for i in range(8)]
     cap = 1024
     # Force 4 final chunks (size = 4x cap, even split).
-    build_fn, _ = _make_build_fn(tmp_path, lambda a: 4 * cap if len(a) == 8 else cap // 2)
+    build_fn, _ = _make_build_fn(
+        tmp_path, lambda a: 4 * cap if len(a) == 8 else cap // 2
+    )
     result = split(arts, build_fn, size_cap_bytes=cap)
     assert [a for chunk in result for a in chunk] == arts
 
@@ -158,9 +158,15 @@ def _sized_by_category(weights: dict[str, int]) -> Callable[[list[Article]], int
 def test_category_mode_single_part_when_all_fit(tmp_path):
     """Every Category fits together -> one Part in category_order."""
     cap = 1000
-    arts = [_article(0, "Tech"), _article(1, "Tech")] + [_article(2, "Photography")] + [_article(3, "Misc")]
+    arts = (
+        [_article(0, "Tech"), _article(1, "Tech")]
+        + [_article(2, "Photography")]
+        + [_article(3, "Misc")]
+    )
     # 100 each, 4 articles = 400 total, well under cap.
-    build_fn, calls = _make_build_fn(tmp_path, _sized_by_category({"Tech": 100, "Photography": 100, "Misc": 100}))
+    build_fn, calls = _make_build_fn(
+        tmp_path, _sized_by_category({"Tech": 100, "Photography": 100, "Misc": 100})
+    )
     result = split(
         arts,
         build_fn,
@@ -251,7 +257,9 @@ def test_category_mode_unranked_categories_sort_alphabetically(tmp_path):
     """Categories absent from category_order trail in alphabetical order."""
     cap = 1000
     arts = [_article(0, "Zebra"), _article(1, "Apple"), _article(2, "Tech")]
-    build_fn, _ = _make_build_fn(tmp_path, _sized_by_category({"Zebra": 50, "Apple": 50, "Tech": 50}))
+    build_fn, _ = _make_build_fn(
+        tmp_path, _sized_by_category({"Zebra": 50, "Apple": 50, "Tech": 50})
+    )
     result = split(
         arts,
         build_fn,

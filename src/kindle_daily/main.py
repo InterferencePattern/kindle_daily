@@ -45,7 +45,8 @@ def cli(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--no-mark-read",
         action="store_true",
-        help="Send the email but leave items unread in FreshRSS. " "Useful for first-time testing.",
+        help="Send the email but leave items unread in FreshRSS. "
+        "Useful for first-time testing.",
     )
     parser.add_argument(
         "--include-read",
@@ -148,7 +149,10 @@ def run(
         "building one issue from %d articles across %d categories: %s",
         len(articles),
         len(category_order),
-        ", ".join(f"{cat}({sum(1 for a in articles if a.category == cat)})" for cat in category_order),
+        ", ".join(
+            f"{cat}({sum(1 for a in articles if a.category == cat)})"
+            for cat in category_order
+        ),
     )
 
     # Partition into size-capped Parts on Category boundaries. The chunker's
@@ -158,9 +162,13 @@ def run(
             measure_dir = Path(tmp)
 
             def measure_build(arts: list[Article]) -> Path:
-                return epub_builder.build(arts, date=today, out_dir=measure_dir, cover_jpeg=None)
+                return epub_builder.build(
+                    arts, date=today, out_dir=measure_dir, cover_jpeg=None
+                )
 
-            parts = chunker.split(articles, measure_build, config.max_epub_bytes, category_order)
+            parts = chunker.split(
+                articles, measure_build, config.max_epub_bytes, category_order
+            )
     except Exception:
         log.exception("failed to partition the daily issue; nothing sent")
         return 1
@@ -172,7 +180,8 @@ def run(
     # (no partial delivery). Each Part gets its own cover and Part label.
     try:
         built = [
-            _build_part(config, part_articles, today=today, index=i, total=n) for i, part_articles in enumerate(parts)
+            _build_part(config, part_articles, today=today, index=i, total=n)
+            for i, part_articles in enumerate(parts)
         ]
     except Exception:
         log.exception("failed to build the daily issue; nothing sent")
@@ -184,7 +193,7 @@ def run(
         return 0
 
     failures: list[int] = []
-    for i, (epub_path, part_articles) in enumerate(zip(built, parts)):
+    for i, (epub_path, part_articles) in enumerate(zip(built, parts, strict=True)):
         subject = _subject(today, index=i, total=n)
         try:
             mailer.send(config, epub_path, subject=subject)
@@ -223,7 +232,9 @@ def _drop_oversized_articles(articles: list[Article]) -> list[Article]:
     """
     kept: list[Article] = []
     for article in articles:
-        size = len(article.body_html.encode("utf-8")) + sum(len(img.data) for img in article.images)
+        size = len(article.body_html.encode("utf-8")) + sum(
+            len(img.data) for img in article.images
+        )
         if size > MAX_ARTICLE_BYTES:
             log.warning(
                 "skipping oversized article (%.1f MB > %.0f MB cap): %s",

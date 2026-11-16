@@ -20,7 +20,6 @@ from __future__ import annotations
 import datetime as dt
 import html
 import logging
-from collections import OrderedDict
 from importlib import resources
 from pathlib import Path, PurePosixPath
 from urllib.parse import urlparse
@@ -179,12 +178,16 @@ def _add_image_assets(book: epub.EpubBook, articles: list[Article]) -> None:
 
 def _load_css() -> str:
     """Load the bundled magazine stylesheet."""
-    return resources.files("kindle_daily.assets").joinpath(CSS_FILENAME).read_text(encoding="utf-8")
+    return (
+        resources.files("kindle_daily.assets")
+        .joinpath(CSS_FILENAME)
+        .read_text(encoding="utf-8")
+    )
 
 
-def _group_by_section(articles: list[Article]) -> "OrderedDict[str, list[Article]]":
+def _group_by_section(articles: list[Article]) -> dict[str, list[Article]]:
     """Group articles by section, preserving first-seen order."""
-    groups: OrderedDict[str, list[Article]] = OrderedDict()
+    groups: dict[str, list[Article]] = {}
     for art in articles:
         groups.setdefault(art.category, []).append(art)
     return groups
@@ -227,7 +230,7 @@ def _make_cover(date: dt.date, article_count: int, feed_count: int) -> epub.Epub
 
 
 def _make_contents(
-    by_section: "OrderedDict[str, list[Article]]",
+    by_section: dict[str, list[Article]],
 ) -> epub.EpubHtml:
     parts = ['<div class="contents">', "<h1>Contents</h1>"]
     for section, articles in by_section.items():
@@ -284,5 +287,9 @@ def _article_href(art: Article) -> str:
 
 
 def _make_colophon(date: dt.date) -> epub.EpubHtml:
-    body = '<div class="colophon">' f"Generated {html.escape(date.isoformat())} · kindle_daily" "</div>"
+    body = (
+        '<div class="colophon">'
+        f"Generated {html.escape(date.isoformat())} · kindle_daily"
+        "</div>"
+    )
     return _xhtml_page("colophon.xhtml", "Colophon", body)
