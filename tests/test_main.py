@@ -107,6 +107,32 @@ def test_full_run_sends_one_combined_issue(monkeypatch, config):
     assert marked == [["tag:item/0000", "tag:item/0002", "tag:item/0001"]]
 
 
+def test_cover_failure_still_sends_the_issue_without_a_cover(monkeypatch, config):
+    sent: list = []
+    marked: list = []
+    _install_fakes(monkeypatch, [_feed_item(0)], sent, marked)
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("compositing exploded")
+
+    monkeypatch.setattr(main_mod.cover, "_render_cover", boom)
+    covers: list = []
+    real_build = main_mod.epub_builder.build
+
+    def spy_build(arts, *, cover_jpeg, **kw):
+        covers.append(cover_jpeg)
+        return real_build(arts, cover_jpeg=cover_jpeg, **kw)
+
+    monkeypatch.setattr(main_mod.epub_builder, "build", spy_build)
+
+    rc = main_mod.run(config, dry_run=False)
+
+    assert rc == 0
+    assert len(sent) == 1
+    assert covers and all(c is None for c in covers)
+    assert marked == [["tag:item/0000"]]
+
+
 def test_uncategorized_items_appear_as_misc_in_the_combined_issue(monkeypatch, config):
     sent: list = []
     marked: list = []

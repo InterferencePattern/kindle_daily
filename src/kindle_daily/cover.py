@@ -84,6 +84,21 @@ def render_cover(
         candidate image is found, no fonts are available, or compositing
         fails for any other reason.
     """
+    # The cover is decorative: no failure here may cancel the day's delivery.
+    try:
+        return _render_cover(articles, date, count, categories)
+    except Exception:
+        log.exception("cover: rendering failed; using the typographic cover")
+        return None
+
+
+def _render_cover(
+    articles: list[Article],
+    date: dt.date,
+    count: int,
+    categories: list[str] | None,
+) -> bytes | None:
+    """Body of ``render_cover``; may raise."""
     masthead_font = _load_font(_SERIF_BOLD, size=110)
     date_font = _load_font(_SANS_BOLD, size=72)
     issue_font = _load_font(_SANS_BOLD, size=130)

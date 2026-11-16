@@ -152,8 +152,21 @@ def fetch_all(items: list[FeedItem]) -> list[Article]:
     if not items:
         return []
     with ThreadPoolExecutor(max_workers=FETCH_WORKERS) as pool:
-        results = list(pool.map(_fetch_one, items))
+        results = list(pool.map(_fetch_one_safe, items))
     return [a for a in results if a is not None]
+
+
+def _fetch_one_safe(item: FeedItem) -> Article | None:
+    """``_fetch_one``, but any exception drops just this article.
+
+    An uncaught error would otherwise abort the run, and the article (still
+    unread) would abort every run after it until it ages out.
+    """
+    try:
+        return _fetch_one(item)
+    except Exception:
+        log.exception("fetch failed for %s; dropping it", item.url or item.title)
+        return None
 
 
 def _fetch_one(item: FeedItem) -> Article | None:
@@ -828,7 +841,12 @@ def _download_and_optimize(client: httpx.Client, url: str) -> ImageAsset | None:
             buf = io.BytesIO()
             im.save(buf, format="JPEG", quality=IMG_JPEG_QUALITY, optimize=True)
             data = buf.getvalue()
-    except (UnidentifiedImageError, OSError, ValueError) as exc:
+    except (
+        UnidentifiedImageError,
+        Image.DecompressionBombError,
+        OSError,
+        ValueError,
+    ) as exc:
         log.info("image decode failed for %s: %s", url, exc)
         return None
 

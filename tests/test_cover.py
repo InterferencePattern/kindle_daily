@@ -82,12 +82,8 @@ def _hero_article(width: int = 1200, height: int = 1600) -> Article:
     )
 
 
-def test_render_cover_returns_jpeg_with_roster(monkeypatch):
-    """Full render path (with compositing) succeeds and yields JPEG bytes."""
-    if cover._load_font(cover._SANS_BOLD, 10) is None:
-        pytest.skip("no usable fonts on this system")
-
-    # Serve a synthetic hero image instead of hitting the network.
+def _serve_fake_hero(monkeypatch):
+    """Serve a synthetic hero image instead of hitting the network."""
     hero = Image.new("RGB", (1200, 1600), color=(128, 128, 128))
     buf = io.BytesIO()
     hero.save(buf, format="JPEG")
@@ -114,6 +110,13 @@ def test_render_cover_returns_jpeg_with_roster(monkeypatch):
 
     monkeypatch.setattr(cover.httpx, "Client", _FakeClient)
 
+
+def test_render_cover_returns_jpeg_with_roster(monkeypatch):
+    """Full render path (with compositing) succeeds and yields JPEG bytes."""
+    if cover._load_font(cover._SANS_BOLD, 10) is None:
+        pytest.skip("no usable fonts on this system")
+    _serve_fake_hero(monkeypatch)
+
     out = cover.render_cover(
         [_hero_article()],
         date=dt.date(2026, 5, 7),
@@ -123,3 +126,18 @@ def test_render_cover_returns_jpeg_with_roster(monkeypatch):
 
     assert out is not None
     assert out[:2] == b"\xff\xd8"  # JPEG start-of-image marker
+
+
+def test_render_cover_returns_none_when_compose_raises(monkeypatch):
+    """A compositing crash falls back to no cover instead of propagating."""
+    if cover._load_font(cover._SANS_BOLD, 10) is None:
+        pytest.skip("no usable fonts on this system")
+    _serve_fake_hero(monkeypatch)
+
+    def boom(*args, **kwargs):
+        raise Image.DecompressionBombError("too big")
+
+    monkeypatch.setattr(cover, "_compose", boom)
+
+    out = cover.render_cover([_hero_article()], date=dt.date(2026, 5, 7), count=1)
+    assert out is None
