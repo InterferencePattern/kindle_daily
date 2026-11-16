@@ -11,3 +11,12 @@ logs/
 
 .pytest_cache/
 .DS_Store
+
+# local tooling
+.idea/
+.serena/
+.claude/
+
+# generated issues; personal notes
+*.epub
+*.local.md

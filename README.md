@@ -102,6 +102,10 @@ chmod 600 .env
 The installer adds a cron line that fires `run.sh` every day at 05:00 local
 time. Logs land in `logs/run.log`.
 
+To update, `git pull` on the Pi. The package is installed in editable mode, so
+the next cron run picks up the change; re-run `./install.sh` if
+`pyproject.toml` changed, and add any new `.env` keys by hand.
+
 ## Configuration
 
 All configuration is via `.env`. See [`.env.example`](./.env.example) for the
