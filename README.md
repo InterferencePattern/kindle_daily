@@ -213,3 +213,28 @@ the 24 hours before the run. Two caveats, both from the filter going by the
 Skipped articles aren't deleted; they just stay unread in FreshRSS. If you
 want a mostly-daily paper without those gaps, `MAX_AGE_DAYS=2` is a good
 compromise. Delivered articles are marked read, so nothing appears twice.
+
+### Why do some articles stay unread in FreshRSS?
+
+An article is marked read only after the email containing it is accepted by
+Gmail. Everything else is left unread on purpose, so a problem shows up as
+unread articles rather than articles quietly vanishing:
+
+- **Excluded categories** (`EXCLUDED_CATEGORIES`): never sent, never marked.
+- **Older than `MAX_AGE_DAYS`**: never sent, never marked.
+- **Couldn't be fetched or extracted**: dropped from today's issue and
+  retried on the next run.
+- **Bigger than the size cap** on its own (see `MAX_EPUB_MB`): skipped with a
+  warning in the log. Read it in your usual RSS client.
+- **In a Part whose email failed to send**: goes out on the next run.
+
+So your FreshRSS unread count won't necessarily reach zero, and that's
+expected.
+
+### Can I cap how many articles I get?
+
+No, deliberately. An earlier `MAX_ARTICLES` setting was removed because it
+silently cut articles, which made "where did that article go?" bugs
+impossible to spot. A big day is split into several Parts instead. To get
+fewer articles, cut them at the source: mute or unsubscribe from feeds in
+FreshRSS, or list noisy categories in `EXCLUDED_CATEGORIES`.
