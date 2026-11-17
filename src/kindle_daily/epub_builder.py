@@ -26,6 +26,7 @@ from urllib.parse import urlparse
 
 from ebooklib import epub
 
+from .chunker import group_by_category
 from .fetcher import Article
 
 log = logging.getLogger(__name__)
@@ -100,7 +101,7 @@ def build(
 
     _add_image_assets(book, articles)
 
-    by_section = _group_by_section(articles)
+    by_section = group_by_category(articles)
     feed_count = len({a.feed_title for a in articles})
 
     contents = _make_contents(by_section)
@@ -183,14 +184,6 @@ def _load_css() -> str:
         .joinpath(CSS_FILENAME)
         .read_text(encoding="utf-8")
     )
-
-
-def _group_by_section(articles: list[Article]) -> dict[str, list[Article]]:
-    """Group articles by section, preserving first-seen order."""
-    groups: dict[str, list[Article]] = {}
-    for art in articles:
-        groups.setdefault(art.category, []).append(art)
-    return groups
 
 
 def _slug(value: str) -> str:

@@ -141,7 +141,7 @@ def _pack_by_category(
     list[list[Article]]
         One sub-list per Part, in delivery order.
     """
-    by_category = _group_by_category(articles)
+    by_category = group_by_category(articles)
     ordered = _ordered_categories(list(by_category), category_order)
 
     parts: list[list[Article]] = []
@@ -175,7 +175,7 @@ def _fits(articles: list[Article], build_fn: BuildFn, size_cap_bytes: int) -> bo
     return build_fn(articles).stat().st_size <= size_cap_bytes
 
 
-def _group_by_category(articles: list[Article]) -> dict[str, list[Article]]:
+def group_by_category(articles: list[Article]) -> dict[str, list[Article]]:
     """Group ``articles`` by Category, preserving each Category's order."""
     groups: dict[str, list[Article]] = {}
     for article in articles:

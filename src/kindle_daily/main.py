@@ -283,15 +283,6 @@ def _category_order(articles: list[Article]) -> list[str]:
     return sorted(counts, key=lambda category: (-counts[category], category))
 
 
-def _part_categories(part_articles: list[Article]) -> list[str]:
-    """Return the Categories present in a Part, in first-seen (delivery) order."""
-    seen: list[str] = []
-    for article in part_articles:
-        if article.category not in seen:
-            seen.append(article.category)
-    return seen
-
-
 def _subject(today: dt.date, *, index: int, total: int) -> str:
     """Email subject for the ``index``-th of ``total`` Parts (0-indexed)."""
     if total == 1:
@@ -313,7 +304,7 @@ def _build_part(
         part_articles,
         date=today,
         count=len(part_articles),
-        categories=_part_categories(part_articles),
+        categories=list(chunker.group_by_category(part_articles)),
     )
     path = epub_builder.build(
         part_articles,
