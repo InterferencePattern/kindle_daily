@@ -179,6 +179,26 @@ def test_fetch_all_preserves_order_and_drops_failures(monkeypatch):
     assert bodies == ["<p>A body</p>", "<p>C body</p>"]
 
 
+def test_fetch_all_drops_only_the_item_that_raises(monkeypatch):
+    import kindle_daily.fetcher as fetcher_mod
+
+    real_fetch_one = fetcher_mod._fetch_one
+
+    def flaky(item):
+        if item.url == "https://b/":
+            raise RuntimeError("boom")
+        return real_fetch_one(item)
+
+    monkeypatch.setattr(fetcher_mod, "_fetch_one", flaky)
+
+    items = [
+        _make_item(url="https://a/", summary="<p>A body</p>"),
+        _make_item(url="https://b/", summary="<p>B body</p>"),
+        _make_item(url="https://c/", summary="<p>C body</p>"),
+    ]
+    assert [a.body_html for a in fetch_all(items)] == ["<p>A body</p>", "<p>C body</p>"]
+
+
 def test_word_count_strips_tags():
     assert _word_count("<p>One <b>two</b> three</p>") == 3
     assert _word_count("") == 0
@@ -189,7 +209,7 @@ def test_strip_subscription_cta_removes_promo_and_lead_in():
     # wedged between real article paragraphs and a real section heading.
     body = (
         "<p>Real paragraph one with actual content.</p>"
-        '<h2>On supporting science journalism</h2>'
+        "<h2>On supporting science journalism</h2>"
         "<p>If you're enjoying this article, consider supporting our "
         'award-winning journalism by <a href="/sub/">subscribing</a>. By '
         "purchasing a subscription you are helping to ensure the future of "
@@ -451,3 +471,29 @@ def test_rewrite_images_inline_drops_orphaned_caption_with_image(monkeypatch):
     body2 = "".join(f'<img src="https://x.test/h-{i}.jpg"/>' for i in range(n)) + long_p
     out2, _ = _rewrite_images_inline(body2, "https://x.test/", client=None)
     assert "word word" in out2
+
+
+def test_download_and_optimize_skips_decompression_bombs(monkeypatch):
+    """A bomb drops just the image, not the whole article."""
+    import io
+
+    from PIL import Image
+
+    import kindle_daily.fetcher as fetcher_mod
+
+    buf = io.BytesIO()
+    Image.new("RGB", (10, 10)).save(buf, format="PNG")
+
+    class _Resp:
+        content = buf.getvalue()
+
+        def raise_for_status(self):
+            pass
+
+    class _Client:
+        def get(self, _url):
+            return _Resp()
+
+    # 100 px > 2 * MAX_IMAGE_PIXELS, so PIL raises DecompressionBombError.
+    monkeypatch.setattr(Image, "MAX_IMAGE_PIXELS", 10)
+    assert fetcher_mod._download_and_optimize(_Client(), "https://x/bomb.png") is None

@@ -91,7 +91,7 @@ def test_build_with_part_adds_part_suffix_to_title_and_filename(tmp_path, articl
     )
     assert out.name == "kindle_daily_2026-05-07_part2of3.epub"
     book = epub.read_epub(str(out))
-    assert "Kindle Daily Part 2 — Thursday, May 7, 2026" == book.title
+    assert book.title == "Kindle Daily Part 2 — Thursday, May 7, 2026"
 
 
 def test_build_manifest_ids_are_valid_xml_names(tmp_path, articles):

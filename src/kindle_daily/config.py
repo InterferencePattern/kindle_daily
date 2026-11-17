@@ -84,7 +84,9 @@ def load_config(project_root: Path | None = None) -> Config:
 
     missing = [name for name in _REQUIRED if not os.environ.get(name)]
     if missing:
-        raise RuntimeError("Missing required environment variables: " + ", ".join(missing))
+        raise RuntimeError(
+            "Missing required environment variables: " + ", ".join(missing)
+        )
 
     out_dir = project_root / "out"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -92,7 +94,9 @@ def load_config(project_root: Path | None = None) -> Config:
     max_epub_mb = int(os.environ.get("MAX_EPUB_MB", "15"))
     max_age_days = int(os.environ.get("MAX_AGE_DAYS", "7"))
     excluded_categories = tuple(
-        name.strip() for name in os.environ.get("EXCLUDED_CATEGORIES", "").split(",") if name.strip()
+        name.strip()
+        for name in os.environ.get("EXCLUDED_CATEGORIES", "").split(",")
+        if name.strip()
     )
 
     return Config(

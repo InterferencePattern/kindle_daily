@@ -107,6 +107,32 @@ def test_full_run_sends_one_combined_issue(monkeypatch, config):
     assert marked == [["tag:item/0000", "tag:item/0002", "tag:item/0001"]]
 
 
+def test_cover_failure_still_sends_the_issue_without_a_cover(monkeypatch, config):
+    sent: list = []
+    marked: list = []
+    _install_fakes(monkeypatch, [_feed_item(0)], sent, marked)
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("compositing exploded")
+
+    monkeypatch.setattr(main_mod.cover, "_render_cover", boom)
+    covers: list = []
+    real_build = main_mod.epub_builder.build
+
+    def spy_build(arts, *, cover_jpeg, **kw):
+        covers.append(cover_jpeg)
+        return real_build(arts, cover_jpeg=cover_jpeg, **kw)
+
+    monkeypatch.setattr(main_mod.epub_builder, "build", spy_build)
+
+    rc = main_mod.run(config, dry_run=False)
+
+    assert rc == 0
+    assert len(sent) == 1
+    assert covers and all(c is None for c in covers)
+    assert marked == [["tag:item/0000"]]
+
+
 def test_uncategorized_items_appear_as_misc_in_the_combined_issue(monkeypatch, config):
     sent: list = []
     marked: list = []
@@ -120,7 +146,9 @@ def test_uncategorized_items_appear_as_misc_in_the_combined_issue(monkeypatch, c
 
     assert rc == 0
     # One combined issue; the subject carries no category name.
-    assert [subject for _, subject in sent] == [f"Kindle Daily — {main_mod.dt.date.today().isoformat()}"]
+    assert [subject for _, subject in sent] == [
+        f"Kindle Daily — {main_mod.dt.date.today().isoformat()}"
+    ]
     # Single mark-read batch; Misc (item 0) leads Tech (item 1).
     assert marked == [["tag:item/0000", "tag:item/0001"]]
 
@@ -145,7 +173,9 @@ def test_send_failure_fails_the_run(monkeypatch, config):
             marked.append(list(ids))
 
     monkeypatch.setattr(main_mod, "FreshRSSClient", FakeClient)
-    monkeypatch.setattr(main_mod.fetcher, "fetch_all", lambda its: [_article(it) for it in its])
+    monkeypatch.setattr(
+        main_mod.fetcher, "fetch_all", lambda its: [_article(it) for it in its]
+    )
 
     def fake_send(cfg, path, subject):
         raise smtplib.SMTPException("simulated SMTP failure")
@@ -327,7 +357,9 @@ def test_oversized_article_is_skipped_before_epub_build(monkeypatch, config, cap
         return path
 
     monkeypatch.setattr(main_mod.epub_builder, "build", fake_build)
-    monkeypatch.setattr(main_mod.cover, "render_cover", lambda articles, *, date, count, categories: b"")
+    monkeypatch.setattr(
+        main_mod.cover, "render_cover", lambda articles, *, date, count, categories: b""
+    )
     monkeypatch.setattr(
         main_mod.mailer,
         "send",
@@ -347,21 +379,29 @@ def test_oversized_article_is_skipped_before_epub_build(monkeypatch, config, cap
     # And only the small article was marked read.
     assert marked == [["tag:item/0000"]]
     # The oversized URL appears in the skip warning.
-    matching = [r for r in caplog.records if "skipping oversized article" in r.getMessage()]
+    matching = [
+        r for r in caplog.records if "skipping oversized article" in r.getMessage()
+    ]
     assert len(matching) == 1
     assert matching[0].levelno == logging.WARNING
     assert "https://example.test/1" in matching[0].getMessage()
 
 
-def _feed_item_published(i: int, *, published_ms: int, category: str = "Tech") -> FeedItem:
-    return dataclasses.replace(_feed_item(i, category=category), published_ms=published_ms)
+def _feed_item_published(
+    i: int, *, published_ms: int, category: str = "Tech"
+) -> FeedItem:
+    return dataclasses.replace(
+        _feed_item(i, category=category), published_ms=published_ms
+    )
 
 
 def test_published_date_filter_drops_items_older_than_max_age(monkeypatch, config):
     """An item whose published date is older than max_age_days never reaches fetch."""
     now_ms = int(time.time()) * 1000
     fresh = _feed_item_published(0, published_ms=now_ms - 1 * 86400 * 1000)  # 1 day old
-    stale = _feed_item_published(1, published_ms=now_ms - 30 * 86400 * 1000)  # 30 days old
+    stale = _feed_item_published(
+        1, published_ms=now_ms - 30 * 86400 * 1000
+    )  # 30 days old
 
     sent: list = []
     marked: list = []
@@ -377,7 +417,10 @@ def test_published_date_filter_drops_items_older_than_max_age(monkeypatch, confi
 def test_published_date_filter_keeps_items_within_window(monkeypatch, config):
     """An item published within the window is kept."""
     now_ms = int(time.time()) * 1000
-    items = [_feed_item_published(i, published_ms=now_ms - i * 86400 * 1000) for i in range(3)]
+    items = [
+        _feed_item_published(i, published_ms=now_ms - i * 86400 * 1000)
+        for i in range(3)
+    ]
 
     sent: list = []
     marked: list = []
@@ -389,7 +432,9 @@ def test_published_date_filter_keeps_items_within_window(monkeypatch, config):
     assert sorted(marked[0]) == sorted(it.item_id for it in items)
 
 
-def test_published_date_filter_keeps_items_with_no_timestamp_and_warns(monkeypatch, config, caplog):
+def test_published_date_filter_keeps_items_with_no_timestamp_and_warns(
+    monkeypatch, config, caplog
+):
     """published_ms == 0 means the feed didn't supply a date — keep, but warn."""
     items = [
         _feed_item_published(0, published_ms=0),
@@ -446,8 +491,12 @@ def _install_chunking_fakes(
             marked.append(list(ids))
 
     monkeypatch.setattr(main_mod, "FreshRSSClient", FakeClient)
-    monkeypatch.setattr(main_mod.fetcher, "fetch_all", lambda its: [_article(it) for it in its])
-    monkeypatch.setattr(main_mod.cover, "render_cover", lambda articles, *, date, count, categories: b"")
+    monkeypatch.setattr(
+        main_mod.fetcher, "fetch_all", lambda its: [_article(it) for it in its]
+    )
+    monkeypatch.setattr(
+        main_mod.cover, "render_cover", lambda articles, *, date, count, categories: b""
+    )
 
     def fake_build(articles, *, date, out_dir, cover_jpeg, part=None):
         built.append((part, [a.item_id for a in articles]))
@@ -461,7 +510,10 @@ def _install_chunking_fakes(
     monkeypatch.setattr(main_mod.epub_builder, "build", fake_build)
 
     def fake_send(cfg, path, subject):
-        if send_raises_for_part is not None and f"Part {send_raises_for_part}/" in subject:
+        if (
+            send_raises_for_part is not None
+            and f"Part {send_raises_for_part}/" in subject
+        ):
             raise smtplib.SMTPException("forced failure")
         sent.append((path, subject))
 

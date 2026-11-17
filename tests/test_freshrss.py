@@ -72,7 +72,9 @@ def test_list_unread_parses_items(config, httpx_mock, stream_payload):
     assert second.category == ""
 
 
-def test_list_unread_does_not_send_label_xt_even_when_excludes_configured(config, httpx_mock):
+def test_list_unread_does_not_send_label_xt_even_when_excludes_configured(
+    config, httpx_mock
+):
     """FreshRSS reads a single ``xt`` value (PHP ``$_GET['xt']``) and only honours
     ``user/-/state/com.google/{read,unread,starred}`` as the exclude target.
     Sending label-xt does nothing server-side and, worse, overwrites the
@@ -125,7 +127,9 @@ def test_mark_read_batches_and_uses_write_token(config, httpx_mock):
     client = FreshRSSClient(config, client=httpx.Client())
     client.mark_read(ids)
 
-    edit_calls = [r for r in httpx_mock.get_requests() if r.url.path.endswith("/edit-tag")]
+    edit_calls = [
+        r for r in httpx_mock.get_requests() if r.url.path.endswith("/edit-tag")
+    ]
     assert len(edit_calls) == 2
     body = edit_calls[0].read().decode()
     assert "T=WRITE-TOKEN" in body
@@ -167,5 +171,7 @@ def test_mark_read_retries_on_transient_timeout(config, httpx_mock, monkeypatch)
     client = FreshRSSClient(config, client=httpx.Client())
     client.mark_read(["tag:item/1"])  # one batch, three POST attempts
 
-    edit_calls = [r for r in httpx_mock.get_requests() if r.url.path.endswith("/edit-tag")]
+    edit_calls = [
+        r for r in httpx_mock.get_requests() if r.url.path.endswith("/edit-tag")
+    ]
     assert len(edit_calls) == 3

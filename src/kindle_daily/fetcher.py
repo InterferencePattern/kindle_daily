@@ -18,7 +18,7 @@ import logging
 import re
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin
 
 import httpx
 import trafilatura
@@ -152,8 +152,21 @@ def fetch_all(items: list[FeedItem]) -> list[Article]:
     if not items:
         return []
     with ThreadPoolExecutor(max_workers=FETCH_WORKERS) as pool:
-        results = list(pool.map(_fetch_one, items))
+        results = list(pool.map(_fetch_one_safe, items))
     return [a for a in results if a is not None]
+
+
+def _fetch_one_safe(item: FeedItem) -> Article | None:
+    """``_fetch_one``, but any exception drops just this article.
+
+    An uncaught error would otherwise abort the run, and the article (still
+    unread) would abort every run after it until it ages out.
+    """
+    try:
+        return _fetch_one(item)
+    except Exception:
+        log.exception("fetch failed for %s; dropping it", item.url or item.title)
+        return None
 
 
 def _fetch_one(item: FeedItem) -> Article | None:
@@ -344,7 +357,14 @@ _SUBSCRIPTION_CTA_RE = re.compile(
 # Words that mark a short heading as the promo's lead-in (e.g. SciAm's
 # "On supporting science journalism"), removed only when it directly precedes a
 # matched CTA paragraph — so real section headings are left alone.
-_CTA_HEADING_WORDS = ("subscrib", "support", "donat", "member", "newsletter", "journalism")
+_CTA_HEADING_WORDS = (
+    "subscrib",
+    "support",
+    "donat",
+    "member",
+    "newsletter",
+    "journalism",
+)
 
 
 def _strip_subscription_cta(body_html: str) -> str:
@@ -377,7 +397,9 @@ def _strip_subscription_cta(body_html: str) -> str:
         prev = p.getprevious()
         if prev is not None and prev.tag in ("h2", "h3", "h4"):
             heading = _normalize("".join(prev.itertext()))
-            if len(heading.split()) <= 10 and any(w in heading for w in _CTA_HEADING_WORDS):
+            if len(heading.split()) <= 10 and any(
+                w in heading for w in _CTA_HEADING_WORDS
+            ):
                 _drop(prev)
         _drop(p)
         removed = True
@@ -423,9 +445,13 @@ _CAPTION_MAX_WORDS = 30
 def _drop_with_caption(img) -> None:
     """Drop an ``<img>`` plus an immediately-following short caption ``<p>``."""
     nxt = img.getnext()
-    if nxt is not None and isinstance(nxt.tag, str) and nxt.tag == "p":
-        if len("".join(nxt.itertext()).split()) < _CAPTION_MAX_WORDS:
-            _drop(nxt)
+    if (
+        nxt is not None
+        and isinstance(nxt.tag, str)
+        and nxt.tag == "p"
+        and len("".join(nxt.itertext()).split()) < _CAPTION_MAX_WORDS
+    ):
+        _drop(nxt)
     _drop(img)
 
 
@@ -828,7 +854,12 @@ def _download_and_optimize(client: httpx.Client, url: str) -> ImageAsset | None:
             buf = io.BytesIO()
             im.save(buf, format="JPEG", quality=IMG_JPEG_QUALITY, optimize=True)
             data = buf.getvalue()
-    except (UnidentifiedImageError, OSError, ValueError) as exc:
+    except (
+        UnidentifiedImageError,
+        Image.DecompressionBombError,
+        OSError,
+        ValueError,
+    ) as exc:
         log.info("image decode failed for %s: %s", url, exc)
         return None
 

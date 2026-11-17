@@ -62,7 +62,7 @@ freshrss-api  ──►  selector  ──►  fetcher  ──►  chunker  ─�
 
 ### Prerequisites
 
-- Python 3.10+
+- Python 3.11+
 - A FreshRSS instance with the API password set (FreshRSS user profile →
   "External access" → set an API password — this is **separate** from your
   login password).
@@ -79,6 +79,7 @@ cd ~/kindle_daily
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
+pre-commit install   # Black, Ruff, YAML/JSON/TOML checks on every commit
 cp .env.example .env
 # edit .env with your real values
 ```
@@ -96,11 +97,16 @@ Once happy, do a one-shot real send:
 python -m kindle_daily.main
 ```
 
-Run the tests:
+Run the tests and the full lint/format suite:
 
 ```bash
 pytest
+pre-commit run --all-files
 ```
+
+Style: Black formats, Ruff lints (including pyupgrade). f-strings everywhere
+*except* logging calls, which keep lazy `%s` args (`log.info("sent %s", path)`)
+so messages are only built when the level is enabled — Ruff's `G` rules enforce this.
 
 ### Raspberry Pi deployment
 

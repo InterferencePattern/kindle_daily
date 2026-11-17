@@ -16,8 +16,8 @@ from __future__ import annotations
 import datetime as dt
 import io
 import logging
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 import httpx
 from PIL import Image, ImageDraw, ImageFont
@@ -84,6 +84,21 @@ def render_cover(
         candidate image is found, no fonts are available, or compositing
         fails for any other reason.
     """
+    # The cover is decorative: no failure here may cancel the day's delivery.
+    try:
+        return _render_cover(articles, date, count, categories)
+    except Exception:
+        log.exception("cover: rendering failed; using the typographic cover")
+        return None
+
+
+def _render_cover(
+    articles: list[Article],
+    date: dt.date,
+    count: int,
+    categories: list[str] | None,
+) -> bytes | None:
+    """Body of ``render_cover``; may raise."""
     masthead_font = _load_font(_SERIF_BOLD, size=110)
     date_font = _load_font(_SANS_BOLD, size=72)
     issue_font = _load_font(_SANS_BOLD, size=130)
@@ -98,7 +113,9 @@ def render_cover(
         return None
 
     try:
-        with httpx.Client(timeout=COVER_DOWNLOAD_TIMEOUT_S, follow_redirects=True) as client:
+        with httpx.Client(
+            timeout=COVER_DOWNLOAD_TIMEOUT_S, follow_redirects=True
+        ) as client:
             resp = client.get(hero_url)
             resp.raise_for_status()
         im = Image.open(io.BytesIO(resp.content))
@@ -292,7 +309,9 @@ def _shadow_text(
     draw.text(xy, text, font=font, fill=255, anchor=anchor)
 
 
-def _load_font(candidates: list[tuple[str, int]], size: int) -> ImageFont.FreeTypeFont | None:
+def _load_font(
+    candidates: list[tuple[str, int]], size: int
+) -> ImageFont.FreeTypeFont | None:
     """Try each (path, ttc-index) until one loads. Return ``None`` if none do."""
     for path, idx in candidates:
         if not Path(path).exists():
