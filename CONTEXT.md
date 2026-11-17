@@ -26,7 +26,7 @@ break, but are never themselves the unit of delivery.
 _Avoid_: "section" (overloaded with EPUB sections), "topic", "feed group"
 
 **Run**:
-One end-to-end execution of the pipeline (cron-triggered at 05:00 local). A
+One end-to-end execution of the pipeline (cron-triggered daily at `RUN_AT`, default 05:00 local). A
 Run produces zero Issues (nothing to send) or one Issue, possibly split into
 multiple Parts.
 _Avoid_: "job", "build"

@@ -14,10 +14,30 @@ fi
 
 mkdir -p out logs
 
+# Daily run time comes from RUN_AT in .env (device-local, default 05:00).
+RUN_AT=05:00
+[[ -f .env ]] && RUN_AT="$(source .env; echo "${RUN_AT:-05:00}")"
+CRON_TIME="$(.venv/bin/python - "$RUN_AT" <<'PY'
+import sys
+from datetime import datetime
+
+raw = sys.argv[1]
+for fmt in ("%H:%M", "%I:%M %p", "%I:%M%p", "%I %p", "%I%p"):
+    try:
+        t = datetime.strptime(raw.strip().upper(), fmt)
+    except ValueError:
+        continue
+    print(t.minute, t.hour)
+    break
+else:
+    sys.exit(f"RUN_AT must look like 17:00, 5:00 PM or 5PM, got {raw!r}")
+PY
+)"
+
 # run.sh writes its own dated logs under logs/, so no redirect here.
 # Any existing line for this checkout is replaced (older installs redirected
 # to logs/run.log, which never got rotated).
-CRON_LINE="0 5 * * * $PWD/run.sh"
+CRON_LINE="$CRON_TIME * * * $PWD/run.sh"
 ( crontab -l 2>/dev/null | grep -vF "$PWD/run.sh" || true; echo "$CRON_LINE" ) | crontab -
 echo "cron line: $CRON_LINE"
 
