@@ -45,7 +45,7 @@ def _install_fakes(monkeypatch, items, sent, marked):
         def __init__(self, cfg):
             pass
 
-        def list_items(self, limit, *, unread_only):
+        def list_items(self, *, unread_only):
             return items
 
         def mark_read(self, ids):
@@ -165,7 +165,7 @@ def test_send_failure_fails_the_run(monkeypatch, config):
         def __init__(self, cfg):
             pass
 
-        def list_items(self, limit, *, unread_only):
+        def list_items(self, *, unread_only):
             return items
 
         def mark_read(self, ids):
@@ -217,7 +217,7 @@ def test_excluded_categories_are_dropped_before_fetch(monkeypatch, config):
         def __init__(self, cfg):
             pass
 
-        def list_items(self, limit, *, unread_only):
+        def list_items(self, *, unread_only):
             return items
 
         def mark_read(self, ids):
@@ -260,7 +260,7 @@ def test_run_with_only_excluded_items_is_a_clean_noop(monkeypatch, config):
         def __init__(self, cfg):
             pass
 
-        def list_items(self, limit, *, unread_only):
+        def list_items(self, *, unread_only):
             return items
 
         def mark_read(self, ids):
@@ -293,7 +293,7 @@ def test_no_unread_is_a_clean_noop(monkeypatch, config):
         def __init__(self, cfg):
             pass
 
-        def list_items(self, limit, *, unread_only):
+        def list_items(self, *, unread_only):
             return []
 
         def mark_read(self, ids):
@@ -337,7 +337,7 @@ def test_oversized_article_is_skipped_before_epub_build(monkeypatch, config, cap
         def __init__(self, cfg):
             pass
 
-        def list_items(self, limit, *, unread_only):
+        def list_items(self, *, unread_only):
             return items
 
         def mark_read(self, ids):
@@ -483,7 +483,7 @@ def _install_chunking_fakes(
         def __init__(self, cfg):
             pass
 
-        def list_items(self, limit, *, unread_only):
+        def list_items(self, *, unread_only):
             return items
 
         def mark_read(self, ids):

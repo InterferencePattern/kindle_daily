@@ -23,11 +23,6 @@ from .freshrss import FreshRSSClient
 
 log = logging.getLogger("kindle_daily")
 
-# Per-part caps are enforced after grouping, so the FreshRSS pull needs to
-# be large enough to fill all categories. 1000 is comfortably above any
-# realistic 24h backlog and keeps the GReader response a single page.
-FETCH_POOL_LIMIT = 1000
-
 # Bytes of every Part that aren't article content: the cover (hard-capped in
 # cover.py) plus EPUB scaffolding (CSS, OPF, NCX, nav, contents, colophon;
 # under 10 KB measured, 64 KB is headroom). Subtracted from max_epub_bytes
@@ -121,7 +116,7 @@ def run(
     today = dt.date.today()
     client = FreshRSSClient(config)
 
-    items = client.list_items(FETCH_POOL_LIMIT, unread_only=not include_read)
+    items = client.list_items(unread_only=not include_read)
 
     result = selector.select(items, config)
     items = result.items
