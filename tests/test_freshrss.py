@@ -40,7 +40,7 @@ def stream_payload() -> dict:
     }
 
 
-def test_list_unread_parses_items(config, httpx_mock, stream_payload):
+def test_list_items_unread_parses_items(config, httpx_mock, stream_payload):
     httpx_mock.add_response(
         method="POST",
         url="http://freshrss.test/api/greader.php/accounts/ClientLogin",
@@ -57,7 +57,7 @@ def test_list_unread_parses_items(config, httpx_mock, stream_payload):
     )
 
     client = FreshRSSClient(config, client=httpx.Client())
-    items = client.list_unread(limit=50)
+    items = client.list_items(50, unread_only=True)
 
     assert len(items) == 2
     first, second = items
@@ -72,7 +72,7 @@ def test_list_unread_parses_items(config, httpx_mock, stream_payload):
     assert second.category == ""
 
 
-def test_list_unread_does_not_send_label_xt_even_when_excludes_configured(
+def test_list_items_unread_does_not_send_label_xt_even_when_excludes_configured(
     config, httpx_mock
 ):
     """FreshRSS reads a single ``xt`` value (PHP ``$_GET['xt']``) and only honours
@@ -98,7 +98,7 @@ def test_list_unread_does_not_send_label_xt_even_when_excludes_configured(
     )
 
     client = FreshRSSClient(excluding, client=httpx.Client())
-    client.list_unread(limit=50)
+    client.list_items(50, unread_only=True)
     # If the URL didn't match (e.g. label-xt was sent), pytest-httpx raises.
 
 

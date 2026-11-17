@@ -15,7 +15,7 @@ import zipfile
 from ebooklib import epub
 
 from kindle_daily import epub_builder
-from kindle_daily.fetcher import ImageAsset
+from kindle_daily.images import ImageAsset
 
 
 def test_build_produces_valid_epub_with_full_navigation(tmp_path, articles):

@@ -10,7 +10,6 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
-from urllib.parse import urlencode
 
 import httpx
 
@@ -99,16 +98,12 @@ class FreshRSSClient:
             return self._auth_token
 
         url = f"{self._config.freshrss_url}/api/greader.php/accounts/ClientLogin"
-        body = urlencode(
-            {
-                "Email": self._config.freshrss_user,
-                "Passwd": self._config.freshrss_api_password,
-            }
-        )
         resp = self._client.post(
             url,
-            content=body,
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            data={
+                "Email": self._config.freshrss_user,
+                "Passwd": self._config.freshrss_api_password,
+            },
         )
         resp.raise_for_status()
         # response body is key=value lines
@@ -133,32 +128,23 @@ class FreshRSSClient:
 
     # ------------------------------------------------------------------ reads
 
-    def list_unread(self, limit: int) -> list[FeedItem]:
-        """List unread items, oldest first.
+    def list_items(self, limit: int, *, unread_only: bool) -> list[FeedItem]:
+        """List reading-list items, oldest first.
 
         Parameters
         ----------
         limit : int
             Maximum number of items to return.
+        unread_only : bool
+            If ``True``, exclude read items (``xt=read``). ``False`` is used
+            for size testing, where read items are included too.
 
         Returns
         -------
         list[FeedItem]
-            Unread items, sorted by publication time ascending so daily issues
-            drain backlogs in chronological order.
+            Items sorted by publication time ascending so daily issues drain
+            backlogs in chronological order.
         """
-        return self._list(limit=limit, unread_only=True)
-
-    def list_recent(self, limit: int) -> list[FeedItem]:
-        """List items from the reading-list, regardless of read/unread state.
-
-        Same shape as :meth:`list_unread` but skips the ``xt=read`` filter.
-        Used for size-comparison tests where read items need to be included
-        for an apples-to-apples view.
-        """
-        return self._list(limit=limit, unread_only=False)
-
-    def _list(self, limit: int, unread_only: bool) -> list[FeedItem]:
         url = (
             f"{self._config.freshrss_url}/api/greader.php"
             f"/reader/api/0/stream/contents/{READING_LIST}"
@@ -213,23 +199,18 @@ class FreshRSSClient:
         token = self._get_write_token()
         for start in range(0, len(item_ids), EDIT_TAG_BATCH):
             batch = item_ids[start : start + EDIT_TAG_BATCH]
-            body = urlencode(
-                [("a", READ_STATE), ("T", token)] + [("i", iid) for iid in batch]
-            )
-            headers = {
-                **self._headers(),
-                "Content-Type": "application/x-www-form-urlencoded",
-            }
-            self._post_edit_tag(url, headers=headers, body=body, batch_size=len(batch))
+            data = {"a": READ_STATE, "T": token, "i": batch}
+            self._post_edit_tag(url, data=data, batch_size=len(batch))
 
-    def _post_edit_tag(
-        self, url: str, *, headers: dict[str, str], body: str, batch_size: int
-    ) -> None:
+    def _post_edit_tag(self, url: str, *, data: dict, batch_size: int) -> None:
         """POST one edit-tag batch with retry+backoff on transient failures."""
         for attempt in range(1, MARK_READ_MAX_ATTEMPTS + 1):
             try:
                 resp = self._client.post(
-                    url, headers=headers, content=body, timeout=MARK_READ_TIMEOUT_S
+                    url,
+                    headers=self._headers(),
+                    data=data,
+                    timeout=MARK_READ_TIMEOUT_S,
                 )
             except (httpx.TimeoutException, httpx.NetworkError) as exc:
                 if attempt == MARK_READ_MAX_ATTEMPTS:
