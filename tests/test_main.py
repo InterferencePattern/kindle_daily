@@ -319,12 +319,12 @@ def test_no_unread_is_a_clean_noop(monkeypatch, config):
 
 
 def test_oversized_article_is_skipped_before_epub_build(monkeypatch, config, caplog):
-    """Articles whose body exceeds the 14 MB cap don't reach the builder or mark-read."""
+    """Articles bigger than the content budget don't reach the builder or mark-read."""
     sent: list = []
     marked: list = []
     items = [_feed_item(0, category="Tech"), _feed_item(1, category="Tech")]
 
-    huge_body = "a" * (15 * 1024 * 1024)  # 15 MB, over the 14 MB cap
+    huge_body = "a" * (config.max_epub_bytes - main_mod.PART_OVERHEAD_BYTES + 1)
 
     def fetch_oversized(its):
         out: list[Article] = []
@@ -764,3 +764,52 @@ def test_connect_oserror_fails_the_part_but_later_parts_still_send(monkeypatch, 
     assert len(connects) == main_mod.mailer.SMTP_MAX_ATTEMPTS + 1
     assert subjects == [f"Kindle Daily Part 2/2 — {today}"]
     assert marked == [["tag:item/0002", "tag:item/0003"]]
+
+
+def test_article_cap_follows_max_epub_bytes(config):
+    """#9: the pre-flight budget is derived from max_epub_bytes, not fixed."""
+    small = dataclasses.replace(config, max_epub_bytes=3 * 1024 * 1024)
+    budget = small.max_epub_bytes - main_mod.PART_OVERHEAD_BYTES
+    fits = dataclasses.replace(_article(_feed_item(0)), body_html="a" * budget)
+    over = dataclasses.replace(_article(_feed_item(1)), body_html="a" * (budget + 1))
+    assert main_mod._drop_oversized_articles([fits, over], budget) == [fits]
+
+
+def test_tiny_max_epub_mb_leaves_no_budget_and_exits_2(monkeypatch, config):
+    sent: list = []
+    marked: list = []
+    _install_fakes(monkeypatch, [_feed_item(0)], sent, marked)
+    tiny = dataclasses.replace(config, max_epub_bytes=1024 * 1024)
+    assert main_mod.run(tiny, dry_run=False) == 2
+    assert sent == [] and marked == []
+
+
+def test_over_cap_part_is_rebuilt_without_cover(monkeypatch, config):
+    """#8: a shipped Part over the cap drops its cover and still sends."""
+    sent: list = []
+    marked: list = []
+    built: list = []
+    covers: list = []
+    cap = config.max_epub_bytes
+    _install_chunking_fakes(
+        monkeypatch, [_feed_item(0)], sent, marked, built, size_for=lambda a: 0
+    )
+    monkeypatch.setattr(
+        main_mod.cover, "render_cover", lambda *a, **kw: b"\xff\xd8jpeg"
+    )
+    fake_build = main_mod.epub_builder.build
+
+    def build_with_cover_weight(articles, *, cover_jpeg, **kw):
+        covers.append(cover_jpeg)
+        path = fake_build(articles, cover_jpeg=cover_jpeg, **kw)
+        # Coverless Part fits; the cover pushes it over the cap.
+        path.write_bytes(b"\0" * (cap + 1 if cover_jpeg else cap // 2))
+        return path
+
+    monkeypatch.setattr(main_mod.epub_builder, "build", build_with_cover_weight)
+
+    assert main_mod.run(config, dry_run=False) == 0
+    # measure (None), real build with cover, rebuild without.
+    assert covers == [None, b"\xff\xd8jpeg", None]
+    assert len(sent) == 1
+    assert sent[0][0].stat().st_size <= cap
