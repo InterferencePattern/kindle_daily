@@ -14,6 +14,14 @@ fi
 
 mkdir -p out logs
 
+# Cover fonts (cover.py). Without them the cover is silently skipped.
+if [[ "$(uname)" == Linux && ! -f /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf ]]; then
+    echo
+    echo "WARNING: DejaVu fonts missing; the EPUB cover will be skipped."
+    echo "         fix with: sudo apt install fonts-dejavu-core"
+    echo
+fi
+
 # Daily run time comes from RUN_AT in .env (device-local, default 05:00).
 # Parsed with python-dotenv, never sourced as bash (#5).
 CRON_TIME="$(.venv/bin/python - <<'PY'

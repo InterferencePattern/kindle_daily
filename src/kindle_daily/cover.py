@@ -22,7 +22,7 @@ from pathlib import Path
 import httpx
 from PIL import Image, ImageDraw, ImageFont
 
-from .fetcher import Article
+from .fetcher import Article, user_agent
 
 log = logging.getLogger(__name__)
 
@@ -111,7 +111,9 @@ def _render_cover(
 
     try:
         with httpx.Client(
-            timeout=COVER_DOWNLOAD_TIMEOUT_S, follow_redirects=True
+            timeout=COVER_DOWNLOAD_TIMEOUT_S,
+            follow_redirects=True,
+            headers={"User-Agent": user_agent()},
         ) as client:
             resp = client.get(hero_url)
             resp.raise_for_status()
