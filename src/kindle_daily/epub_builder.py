@@ -154,7 +154,7 @@ def build(
 
 
 def _add_image_assets(book: epub.EpubBook, articles: list[Article]) -> None:
-    """Register every unique :class:`~kindle_daily.fetcher.ImageAsset` once.
+    """Register every unique :class:`~kindle_daily.images.ImageAsset` once.
 
     Articles that share the same source image (via the ``local_name`` key)
     get deduped here so the EPUB doesn't carry the bytes twice.

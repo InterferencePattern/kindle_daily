@@ -43,7 +43,9 @@ freshrss-api  ──►  selector  ──►  fetcher  ──►  chunker  ─�
    changes; no static config to maintain.
 2. **`fetcher.fetch_all`** — uses [trafilatura](https://trafilatura.readthedocs.io)
    to extract clean full text from each article URL. Falls back to whatever
-   summary FreshRSS already has if extraction fails. Skips images.
+   summary FreshRSS already has if extraction fails. `html_cleanup` makes the
+   body Kindle-safe; `images` downloads inline images and shrinks them to
+   greyscale JPEGs.
 3. **`chunker.split`** — orders categories by article count and packs whole
    categories into size-capped Parts, breaking on category boundaries. A single
    category that overflows the cap on its own is split mid-category as a

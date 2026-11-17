@@ -15,7 +15,8 @@ import pytest
 from PIL import Image
 
 from kindle_daily import cover
-from kindle_daily.fetcher import Article, ImageAsset
+from kindle_daily.fetcher import Article
+from kindle_daily.images import ImageAsset
 
 
 def _fits_max(limit: int):
