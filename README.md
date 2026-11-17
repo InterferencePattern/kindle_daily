@@ -188,3 +188,28 @@ python -m kindle_daily.main                 # full run: fetch → build → send
 python -m kindle_daily.main --dry-run       # build only; write to ./out/, no send, no mark
 python -m kindle_daily.main --no-mark-read  # send for real, but leave items unread (first-test mode)
 ```
+
+## FAQ
+
+### Is each issue only that day's articles?
+
+No. By default an issue is **everything unread** in FreshRSS from the last
+`MAX_AGE_DAYS` days (7 by default). That's deliberate: the job empties your
+inbox, so nothing you subscribed to slips past unread because the Pi was off,
+a feed was slow, or one day's issue failed to send. Whatever isn't delivered
+today simply stays unread and goes out tomorrow.
+
+### Can I get a strict "today's paper" instead?
+
+Set `MAX_AGE_DAYS=1`. Each issue then holds roughly the articles published in
+the 24 hours before the run. Two caveats, both from the filter going by the
+**published date** with a rolling window from run time:
+
+- **Late arrivals are skipped.** A feed that reaches FreshRSS hours after its
+  published time may already be more than a day old by the next run.
+- **Missed runs lose a day.** If the job doesn't run (Pi off, network down),
+  the next issue won't reach back to cover the gap.
+
+Skipped articles aren't deleted; they just stay unread in FreshRSS. If you
+want a mostly-daily paper without those gaps, `MAX_AGE_DAYS=2` is a good
+compromise. Delivered articles are marked read, so nothing appears twice.
