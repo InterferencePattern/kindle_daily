@@ -115,3 +115,15 @@ def test_build_manifest_ids_are_valid_xml_names(tmp_path, articles):
     assert "img-0123456789abcdef" in ids
     for item_id in ids:
         assert re.fullmatch(r"[A-Za-z_][\w.-]*", item_id), item_id
+
+
+def test_section_filenames_dont_collide_when_slugs_match(tmp_path, articles):
+    # "C++" and "C" both slug to "c"; each still needs its own opener page.
+    clashing = [
+        dataclasses.replace(articles[0], category="C++"),
+        dataclasses.replace(articles[1], category="C"),
+    ]
+    out = epub_builder.build(clashing, date=dt.date(2026, 5, 5), out_dir=tmp_path)
+    with zipfile.ZipFile(out) as zf:
+        openers = [n for n in zf.namelist() if "/section-" in n]
+    assert len(openers) == 2 and len(set(openers)) == 2

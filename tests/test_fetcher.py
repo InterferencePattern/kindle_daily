@@ -148,3 +148,12 @@ def test_fetcher_sanitizes_full_text_rss_body(monkeypatch):
 
 
 # ----------------------------------------------- inline image rewriter
+
+
+def test_fetch_all_uses_user_agent_override(monkeypatch):
+    from kindle_daily import fetcher
+
+    monkeypatch.setenv("USER_AGENT", "TestAgent/1.0")
+    monkeypatch.setattr(fetcher, "_fetch_one_safe", lambda item: None)
+    fetch_all([_make_item(summary="x")])
+    assert fetcher._TRAFILATURA_CONFIG.get("DEFAULT", "USER_AGENTS") == "TestAgent/1.0"

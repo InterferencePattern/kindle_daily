@@ -13,6 +13,7 @@ inline as ``<graphic>``) and translate that to HTML. Cleanup lives in
 from __future__ import annotations
 
 import logging
+import os
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
@@ -33,14 +34,13 @@ WORDS_PER_MINUTE = 220
 # Browser User-Agent for trafilatura fetches. Without this, many publishers
 # (Verge, Wired, Ars, etc.) 403 us as a bot. Doesn't help with strict paywalls
 # (NYT/WSJ/FT), which gate on cookies as well — those still fall back to the
-# FreshRSS-stored summary.
+# FreshRSS-stored summary. Override with USER_AGENT in .env when it ages.
 _BROWSER_UA = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/121.0.0.0 Safari/537.36"
+    "Chrome/157.0.0.0 Safari/537.36"
 )
 _TRAFILATURA_CONFIG = use_config()
-_TRAFILATURA_CONFIG.set("DEFAULT", "USER_AGENTS", _BROWSER_UA)
 
 
 @dataclass(frozen=True)
@@ -88,6 +88,15 @@ class Article:
         return max(1, round(self.word_count / WORDS_PER_MINUTE))
 
 
+def user_agent() -> str:
+    """Browser User-Agent for article and image fetches.
+
+    Read at call time, because ``load_config`` loads ``.env`` into
+    ``os.environ`` after this module is imported.
+    """
+    return os.environ.get("USER_AGENT") or _BROWSER_UA
+
+
 def fetch_all(items: list[FeedItem]) -> list[Article]:
     """Fetch full text for every item, in parallel.
 
@@ -106,6 +115,7 @@ def fetch_all(items: list[FeedItem]) -> list[Article]:
     """
     if not items:
         return []
+    _TRAFILATURA_CONFIG.set("DEFAULT", "USER_AGENTS", user_agent())
     with ThreadPoolExecutor(max_workers=FETCH_WORKERS) as pool:
         results = list(pool.map(_fetch_one_safe, items))
     return [a for a in results if a is not None]
@@ -177,7 +187,9 @@ def _fetch_one(item: FeedItem) -> Article | None:
         log.warning("body empty after sanitizing %s; skipping", item.url or item.title)
         return None
     with httpx.Client(
-        timeout=images.IMG_DOWNLOAD_TIMEOUT_S, follow_redirects=True
+        timeout=images.IMG_DOWNLOAD_TIMEOUT_S,
+        follow_redirects=True,
+        headers={"User-Agent": user_agent()},
     ) as client:
         body_html, assets = images.rewrite_images_inline(body_html, item.url, client)
     word_count = html_cleanup.word_count(body_html)

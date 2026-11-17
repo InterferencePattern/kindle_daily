@@ -141,6 +141,7 @@ full list. Key knobs:
 | `MAX_AGE_DAYS` | 7 | Only include articles whose **published date** is within this many days. Filter is applied client-side after the FreshRSS fetch; items the feed exposes without a timestamp are kept (with a warning) so a malformed feed doesn't silently lose articles. |
 | `RUN_AT` | 05:00 | Daily run time in device-local time, e.g. `17:00`, `"5:30 PM"`, `5PM`. Read by `install.sh` when it writes the cron line, so re-run `./install.sh` after changing it. |
 | `RETENTION_DAYS` | 30 | Days to keep built EPUBs in `out/` and daily logs in `logs/`. Older files are deleted by `run.sh` at the start of each run. |
+| `USER_AGENT` | *(recent Chrome)* | Browser User-Agent sent when fetching full article text and images. Many publishers 403 outdated or bot-like UAs, so paste a current browser UA here if fetches start failing. |
 | `EXCLUDED_CATEGORIES` | *(empty)* | Comma-separated FreshRSS category names to skip (e.g. `Comics,Memes`). Applied client-side after the FreshRSS fetch — FreshRSS's GReader API only supports the read/unread/starred values for its `xt` exclude filter, so label exclusion can't be done server-side. |
 
 When the day's issue is split into more than one Part, the EPUBs are titled

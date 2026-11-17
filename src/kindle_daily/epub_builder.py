@@ -18,6 +18,7 @@ hamburger TOC works on every device generation.
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import html
 import logging
 from importlib import resources
@@ -243,7 +244,9 @@ def _make_contents(
 
 def _make_section_opener(section: str) -> epub.EpubHtml:
     body = '<div class="section-opener">' f"<h1>{html.escape(section)}</h1>" "</div>"
-    return _xhtml_page(f"section-{_slug(section)}.xhtml", section, body)
+    # Hash suffix keeps names like "C++" and "C" (both slug "c") apart.
+    digest = hashlib.sha1(section.encode("utf-8")).hexdigest()[:6]
+    return _xhtml_page(f"section-{_slug(section)}-{digest}.xhtml", section, body)
 
 
 def _make_article_page(art: Article) -> epub.EpubHtml:
