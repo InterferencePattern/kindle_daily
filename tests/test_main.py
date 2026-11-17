@@ -5,11 +5,13 @@ from __future__ import annotations
 import dataclasses
 import logging
 import smtplib
+import socket
 import time
 
 from kindle_daily import main as main_mod
 from kindle_daily.fetcher import Article
 from kindle_daily.freshrss import FeedItem
+from kindle_daily.mailer import send as _real_mailer_send
 
 
 def _feed_item(i: int, category: str = "News") -> FeedItem:
@@ -660,3 +662,53 @@ def test_build_failure_ships_nothing(monkeypatch, config):
     assert rc == 1
     assert sent == []
     assert marked == []
+
+
+def test_connect_oserror_fails_the_part_but_later_parts_still_send(monkeypatch, config):
+    """Part 1's connects both raise socket.gaierror: the real mailer retries,
+    Part 1 is recorded as failed, and Part 2 is still attempted and sent."""
+    sent: list = []
+    marked: list = []
+    built: list = []
+    items = [_feed_item(i, category="Tech") for i in range(4)]
+    cap = config.max_epub_bytes
+    _install_chunking_fakes(
+        monkeypatch,
+        items,
+        sent,
+        marked,
+        built,
+        size_for=lambda arts: 2 * cap if len(arts) == 4 else cap // 2,
+    )
+    monkeypatch.setattr(main_mod.mailer, "send", _real_mailer_send)
+
+    connects: list[int] = []
+    subjects: list[str] = []
+
+    class FakeSMTP:
+        def __init__(self, host, port, timeout):
+            connects.append(1)
+            if len(connects) <= main_mod.mailer.SMTP_MAX_ATTEMPTS:
+                raise socket.gaierror("simulated DNS failure")
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def login(self, user, password):
+            pass
+
+        def send_message(self, msg):
+            subjects.append(msg["Subject"])
+
+    monkeypatch.setattr(main_mod.mailer.smtplib, "SMTP_SSL", FakeSMTP)
+
+    rc = main_mod.run(config, dry_run=False)
+
+    today = main_mod.dt.date.today().isoformat()
+    assert rc == 1
+    assert len(connects) == main_mod.mailer.SMTP_MAX_ATTEMPTS + 1
+    assert subjects == [f"Kindle Daily Part 2/2 — {today}"]
+    assert marked == [["tag:item/0002", "tag:item/0003"]]

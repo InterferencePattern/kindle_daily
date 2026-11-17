@@ -20,6 +20,8 @@ SMTP_PORT = 465
 # an outage, just smoothing one-off failures.
 SMTP_MAX_ATTEMPTS = 2
 SMTP_RETRY_DELAY_S = 10.0
+# Without a timeout a stalled connection blocks the cron job forever.
+SMTP_TIMEOUT_S = 60.0
 
 
 def send(config: Config, epub_path: Path, subject: str) -> None:
@@ -36,9 +38,10 @@ def send(config: Config, epub_path: Path, subject: str) -> None:
 
     Raises
     ------
-    smtplib.SMTPException
-        If SMTP login or sending fails. Caller relies on this to gate
-        mark-as-read.
+    OSError
+        If connecting, logging in or sending fails on every attempt
+        (``smtplib.SMTPException`` is a subclass). Caller relies on this to
+        gate mark-as-read.
     """
     msg = EmailMessage()
     msg["From"] = config.gmail_user
@@ -63,10 +66,12 @@ def send(config: Config, epub_path: Path, subject: str) -> None:
     )
     for attempt in range(1, SMTP_MAX_ATTEMPTS + 1):
         try:
-            with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as smtp:
+            with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=SMTP_TIMEOUT_S) as smtp:
                 smtp.login(config.gmail_user, config.gmail_app_password)
                 smtp.send_message(msg)
-        except smtplib.SMTPException as exc:
+        # OSError covers SMTPException plus DNS, refused-connection, SSL and
+        # timeout errors.
+        except OSError as exc:
             if attempt == SMTP_MAX_ATTEMPTS:
                 raise
             log.warning(

@@ -11,7 +11,6 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import logging
-import smtplib
 import sys
 import tempfile
 from pathlib import Path
@@ -188,7 +187,7 @@ def run(
         subject = _subject(today, index=i, total=n)
         try:
             mailer.send(config, epub_path, subject=subject)
-        except smtplib.SMTPException:
+        except OSError:
             log.exception(
                 "part %d/%d: SMTP send failed after retry; leaving ids unread",
                 i + 1,
