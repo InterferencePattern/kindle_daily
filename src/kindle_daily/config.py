@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -50,6 +52,7 @@ class Config:
     out_dir: Path
 
 
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _REQUIRED = (
     "FRESHRSS_URL",
     "FRESHRSS_USER",
@@ -77,37 +80,100 @@ def load_config(project_root: Path | None = None) -> Config:
     Raises
     ------
     RuntimeError
-        If any required environment variable is missing.
+        If any variable is missing or invalid; the message lists every problem.
     """
     project_root = project_root or Path.cwd()
     load_dotenv(project_root / ".env", override=False)
 
-    missing = [name for name in _REQUIRED if not os.environ.get(name)]
-    if missing:
+    config, errors = validate(os.environ, project_root)
+    if errors:
         raise RuntimeError(
-            "Missing required environment variables: " + ", ".join(missing)
+            "Config has problems:\n" + "\n".join(f"  - {e}" for e in errors)
+        )
+    config.out_dir.mkdir(parents=True, exist_ok=True)
+    return config
+
+
+def validate(
+    env: Mapping[str, str], project_root: Path
+) -> tuple[Config | None, list[str]]:
+    """Parse and validate ``env`` into a :class:`Config`.
+
+    Parameters
+    ----------
+    env : Mapping[str, str]
+        Environment to read from (e.g. ``os.environ``). Already-loaded
+        ``.env`` values are expected to be present in this mapping.
+    project_root : Path
+        Project root used to derive ``out_dir``.
+
+    Returns
+    -------
+    (Config | None, list[str])
+        On success, ``(config, [])``. On any validation failure,
+        ``(None, [error_messages...])`` with every problem found — never
+        just the first — so the user can fix them in one round-trip.
+    """
+    errors: list[str] = []
+
+    missing = [name for name in _REQUIRED if not env.get(name)]
+    for name in missing:
+        errors.append(f"{name}: missing (required)")
+
+    max_epub_mb = _parse_positive_int(env, "MAX_EPUB_MB", default="15", errors=errors)
+    max_age_days = _parse_positive_int(env, "MAX_AGE_DAYS", default="7", errors=errors)
+    # Consumed by run.sh, not Config; validated here so check-config catches it.
+    _parse_positive_int(env, "RETENTION_DAYS", default="30", errors=errors)
+
+    kindle_email = env.get("KINDLE_EMAIL", "")
+    if kindle_email and not _EMAIL_RE.match(kindle_email):
+        errors.append(f"KINDLE_EMAIL: {kindle_email!r} doesn't look like an email")
+    elif kindle_email and not kindle_email.endswith("@kindle.com"):
+        errors.append(
+            f"KINDLE_EMAIL: {kindle_email!r} must end in @kindle.com "
+            "(the Send-to-Kindle address suffix)"
         )
 
-    out_dir = project_root / "out"
-    out_dir.mkdir(parents=True, exist_ok=True)
+    gmail_user = env.get("KINDLE_DAILY_GMAIL_USER", "")
+    if gmail_user and not _EMAIL_RE.match(gmail_user):
+        errors.append(
+            f"KINDLE_DAILY_GMAIL_USER: {gmail_user!r} doesn't look like an email"
+        )
 
-    max_epub_mb = int(os.environ.get("MAX_EPUB_MB", "15"))
-    max_age_days = int(os.environ.get("MAX_AGE_DAYS", "7"))
+    if errors:
+        return None, errors
+
     excluded_categories = tuple(
         name.strip()
-        for name in os.environ.get("EXCLUDED_CATEGORIES", "").split(",")
+        for name in env.get("EXCLUDED_CATEGORIES", "").split(",")
         if name.strip()
     )
 
-    return Config(
-        freshrss_url=os.environ["FRESHRSS_URL"].rstrip("/"),
-        freshrss_user=os.environ["FRESHRSS_USER"],
-        freshrss_api_password=os.environ["FRESHRSS_API_PASSWORD"],
-        gmail_user=os.environ["KINDLE_DAILY_GMAIL_USER"],
-        gmail_app_password=os.environ["KINDLE_DAILY_GMAIL_APP_PASSWORD"],
-        kindle_email=os.environ["KINDLE_EMAIL"],
+    config = Config(
+        freshrss_url=env["FRESHRSS_URL"].rstrip("/"),
+        freshrss_user=env["FRESHRSS_USER"],
+        freshrss_api_password=env["FRESHRSS_API_PASSWORD"],
+        gmail_user=env["KINDLE_DAILY_GMAIL_USER"],
+        gmail_app_password=env["KINDLE_DAILY_GMAIL_APP_PASSWORD"],
+        kindle_email=env["KINDLE_EMAIL"],
         max_epub_bytes=max_epub_mb * 1024 * 1024,
         max_age_days=max_age_days,
         excluded_categories=excluded_categories,
-        out_dir=out_dir,
+        out_dir=project_root / "out",
     )
+    return config, []
+
+
+def _parse_positive_int(
+    env: Mapping[str, str], name: str, *, default: str, errors: list[str]
+) -> int:
+    """Parse ``env[name]`` as a positive int, appending to ``errors`` on failure."""
+    raw = env.get(name, default)
+    try:
+        value = int(raw)
+    except ValueError:
+        errors.append(f"{name}: {raw!r} is not an integer")
+        return 0
+    if value <= 0:
+        errors.append(f"{name}: {value} must be > 0")
+    return value

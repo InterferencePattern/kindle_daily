@@ -15,13 +15,16 @@ fi
 mkdir -p out logs
 
 # Daily run time comes from RUN_AT in .env (device-local, default 05:00).
-RUN_AT=05:00
-[[ -f .env ]] && RUN_AT="$(source .env; echo "${RUN_AT:-05:00}")"
-CRON_TIME="$(.venv/bin/python - "$RUN_AT" <<'PY'
+# Parsed with python-dotenv, never sourced as bash (#5).
+CRON_TIME="$(.venv/bin/python - <<'PY'
+import os
 import sys
 from datetime import datetime
 
-raw = sys.argv[1]
+from dotenv import load_dotenv
+
+load_dotenv(".env")
+raw = os.environ.get("RUN_AT", "05:00")
 for fmt in ("%H:%M", "%I:%M %p", "%I:%M%p", "%I %p", "%I%p"):
     try:
         t = datetime.strptime(raw.strip().upper(), fmt)
