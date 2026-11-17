@@ -183,7 +183,7 @@ def _fetch_one(item: FeedItem) -> Article | None:
 
     if item.summary_html and not _summary_appears_truncated(item.summary_html):
         body_html = item.summary_html
-        log.info(
+        log.debug(
             "using RSS body for %s (no truncation marker; len=%d words=%d preview=%r)",
             item.url or item.title,
             len(item.summary_html),

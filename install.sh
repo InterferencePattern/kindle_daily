@@ -14,14 +14,12 @@ fi
 
 mkdir -p out logs
 
-CRON_LINE="0 5 * * * $PWD/run.sh >> $PWD/logs/run.log 2>&1"
-if crontab -l 2>/dev/null | grep -Fq "$PWD/run.sh"; then
-    echo "cron line already installed:"
-    crontab -l | grep -F "$PWD/run.sh"
-else
-    ( crontab -l 2>/dev/null; echo "$CRON_LINE" ) | crontab -
-    echo "added cron line: $CRON_LINE"
-fi
+# run.sh writes its own dated logs under logs/, so no redirect here.
+# Any existing line for this checkout is replaced (older installs redirected
+# to logs/run.log, which never got rotated).
+CRON_LINE="0 5 * * * $PWD/run.sh"
+( crontab -l 2>/dev/null | grep -vF "$PWD/run.sh" || true; echo "$CRON_LINE" ) | crontab -
+echo "cron line: $CRON_LINE"
 
 if [[ ! -f .env ]]; then
     echo
