@@ -67,6 +67,8 @@ def validate(
 
     max_epub_mb = _parse_positive_int(env, "MAX_EPUB_MB", default="15", errors=errors)
     max_age_days = _parse_positive_int(env, "MAX_AGE_DAYS", default="7", errors=errors)
+    # Consumed by run.sh, not Config; validated here so check-config catches it.
+    _parse_positive_int(env, "RETENTION_DAYS", default="30", errors=errors)
 
     kindle_email = env.get("KINDLE_EMAIL", "")
     if kindle_email and not _EMAIL_RE.match(kindle_email):

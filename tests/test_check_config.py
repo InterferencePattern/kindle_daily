@@ -67,6 +67,14 @@ def test_non_positive_max_age_days_is_reported(tmp_path: Path):
     assert any("MAX_AGE_DAYS" in e and "> 0" in e for e in errors)
 
 
+def test_non_positive_retention_days_is_reported(tmp_path: Path):
+    env = _valid_env()
+    env["RETENTION_DAYS"] = "0"
+    cfg, errors = check_config.validate(env, project_root=tmp_path)
+    assert cfg is None
+    assert any("RETENTION_DAYS" in e and "> 0" in e for e in errors)
+
+
 def test_invalid_kindle_email_is_reported(tmp_path: Path):
     env = _valid_env()
     env["KINDLE_EMAIL"] = "alice@gmail.com"  # wrong suffix
