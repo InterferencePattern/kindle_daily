@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import smtplib
+import socket
 from pathlib import Path
 
 import pytest
@@ -44,7 +45,7 @@ class _FakeSMTP:
 def test_send_succeeds_on_first_attempt(monkeypatch, config, epub):
     instances: list[_FakeSMTP] = []
 
-    def factory(host, port):
+    def factory(host, port, timeout):
         instance = _FakeSMTP()
         instances.append(instance)
         return instance
@@ -62,7 +63,7 @@ def test_send_retries_once_on_transient_smtp_failure(monkeypatch, config, epub, 
     """First send_message raises SMTPException; the second succeeds."""
     instances: list[_FakeSMTP] = []
 
-    def factory(host, port):
+    def factory(host, port, timeout):
         # First attempt fails, second succeeds.
         instance = _FakeSMTP(fail_on_send=(len(instances) == 0))
         instances.append(instance)
@@ -92,7 +93,7 @@ def test_send_retries_once_on_transient_smtp_failure(monkeypatch, config, epub, 
 def test_send_propagates_when_both_attempts_fail(monkeypatch, config, epub):
     instances: list[_FakeSMTP] = []
 
-    def factory(host, port):
+    def factory(host, port, timeout):
         instance = _FakeSMTP(fail_on_send=True)
         instances.append(instance)
         return instance
@@ -104,3 +105,25 @@ def test_send_propagates_when_both_attempts_fail(monkeypatch, config, epub):
         mailer.send(config, epub, subject="Both fail")
 
     assert len(instances) == mailer.SMTP_MAX_ATTEMPTS
+
+
+def test_send_retries_on_connect_oserror(monkeypatch, config, epub):
+    """DNS failures raise socket.gaierror (OSError, not SMTPException)."""
+    instances: list[_FakeSMTP] = []
+    timeouts: list[float] = []
+
+    def factory(host, port, timeout):
+        timeouts.append(timeout)
+        if not timeouts[1:]:
+            raise socket.gaierror("simulated DNS failure")
+        instance = _FakeSMTP()
+        instances.append(instance)
+        return instance
+
+    monkeypatch.setattr(mailer.smtplib, "SMTP_SSL", factory)
+    monkeypatch.setattr(mailer.time, "sleep", lambda _s: None)
+
+    mailer.send(config, epub, subject="DNS blip")
+
+    assert timeouts == [mailer.SMTP_TIMEOUT_S] * 2
+    assert len(instances[0].sent) == 1
