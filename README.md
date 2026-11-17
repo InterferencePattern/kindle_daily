@@ -119,8 +119,9 @@ chmod 600 .env
 ./run.sh              # smoke test
 ```
 
-The installer adds a cron line that fires `run.sh` every day at 05:00 local
-time. Logs land in `logs/run-YYYY-MM-DD.log`; EPUBs and logs older than
+The installer adds a cron line that fires `run.sh` every day at `RUN_AT`
+(device-local time, default 05:00). Changing `RUN_AT` only takes effect after
+re-running `./install.sh`. Logs land in `logs/run-YYYY-MM-DD.log`; EPUBs and logs older than
 `RETENTION_DAYS` are deleted at the start of each run.
 
 To update, `git pull` on the Pi. The package is installed in editable mode, so
@@ -136,6 +137,7 @@ full list. Key knobs:
 |---|---|---|
 | `MAX_EPUB_MB`  | 15 | Per-Part EPUB size cap. If the day's combined EPUB doesn't fit under this size, the chunker splits it into multiple **Part N** EPUBs (breaking on category boundaries), each under the cap. Gmail's outbound SMTP cap is 25 MB on the base64-encoded message (~18 MB raw); 15 MB leaves headroom for encoding overhead. |
 | `MAX_AGE_DAYS` | 7 | Only include articles whose **published date** is within this many days. Filter is applied client-side after the FreshRSS fetch; items the feed exposes without a timestamp are kept (with a warning) so a malformed feed doesn't silently lose articles. |
+| `RUN_AT` | 05:00 | Daily run time in device-local time, e.g. `17:00`, `"5:30 PM"`, `5PM`. Read by `install.sh` when it writes the cron line, so re-run `./install.sh` after changing it. |
 | `RETENTION_DAYS` | 30 | Days to keep built EPUBs in `out/` and daily logs in `logs/`. Older files are deleted by `run.sh` at the start of each run. |
 | `EXCLUDED_CATEGORIES` | *(empty)* | Comma-separated FreshRSS category names to skip (e.g. `Comics,Memes`). Applied client-side after the FreshRSS fetch — FreshRSS's GReader API only supports the read/unread/starred values for its `xt` exclude filter, so label exclusion can't be done server-side. |
 
