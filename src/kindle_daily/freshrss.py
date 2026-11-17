@@ -24,6 +24,10 @@ READ_STATE = "user/-/state/com.google/read"
 # batches but we keep them tidy.
 EDIT_TAG_BATCH = 50
 
+# Items per ``stream/contents`` page; ``list_items`` follows ``continuation``
+# until the stream is exhausted, so this only sets the request granularity.
+STREAM_PAGE_SIZE = 1000
+
 # edit-tag can be slow on a busy FreshRSS host. The default httpx 30s read
 # timeout has bitten us, so we use a longer per-request timeout here and
 # retry on transient errors. Marking already-read items as read is a no-op
@@ -128,13 +132,16 @@ class FreshRSSClient:
 
     # ------------------------------------------------------------------ reads
 
-    def list_items(self, limit: int, *, unread_only: bool) -> list[FeedItem]:
-        """List reading-list items, oldest first.
+    def list_items(self, *, unread_only: bool) -> list[FeedItem]:
+        """List every reading-list item, oldest first, across all pages.
+
+        Follows the GReader ``continuation`` token until the stream is
+        exhausted. Items the selector later drops (excluded, too old) stay
+        unread by design, so a single page could fill up with them and hide
+        everything newer.
 
         Parameters
         ----------
-        limit : int
-            Maximum number of items to return.
         unread_only : bool
             If ``True``, exclude read items (``xt=read``). ``False`` is used
             for size testing, where read items are included too.
@@ -156,23 +163,39 @@ class FreshRSSClient:
         # server-side and, worse, sending it as an additional ``xt`` would
         # overwrite the read-state exclude. Selector handles label exclusion
         # client-side; here we send at most the one ``xt`` the server supports.
-        params: list[tuple[str, str]] = []
+        base: list[tuple[str, str]] = []
         if unread_only:
-            params.append(("xt", READ_STATE))
-        params.append(("n", str(limit)))
-        params.append(("r", "o"))  # oldest first
-        params.append(("output", "json"))
-        resp = self._client.get(url, headers=self._headers(), params=params)
-        resp.raise_for_status()
-        payload = resp.json()
+            base.append(("xt", READ_STATE))
+        base.append(("n", str(STREAM_PAGE_SIZE)))
+        base.append(("r", "o"))  # oldest first
+        base.append(("output", "json"))
+
         items: list[FeedItem] = []
-        for raw in payload.get("items", []):
-            items.append(_parse_item(raw))
+        seen_tokens: set[str] = set()
+        continuation: str | None = None
+        pages = 0
+        while True:
+            params = base + ([("c", continuation)] if continuation else [])
+            resp = self._client.get(url, headers=self._headers(), params=params)
+            resp.raise_for_status()
+            payload = resp.json()
+            items.extend(_parse_item(raw) for raw in payload.get("items", []))
+            pages += 1
+            continuation = payload.get("continuation")
+            if not continuation:
+                break
+            if continuation in seen_tokens:
+                log.warning(
+                    "FreshRSS repeated continuation token %r; stopping pagination",
+                    continuation,
+                )
+                break
+            seen_tokens.add(continuation)
         log.info(
-            "FreshRSS returned %d items (unread_only=%s, limit=%d)",
+            "FreshRSS returned %d items over %d page(s) (unread_only=%s)",
             len(items),
+            pages,
             unread_only,
-            limit,
         )
         return items
 

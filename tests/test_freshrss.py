@@ -51,13 +51,13 @@ def test_list_items_unread_parses_items(config, httpx_mock, stream_payload):
         url=(
             "http://freshrss.test/api/greader.php/reader/api/0/stream/contents/"
             "user/-/state/com.google/reading-list"
-            "?xt=user%2F-%2Fstate%2Fcom.google%2Fread&n=50&r=o&output=json"
+            "?xt=user%2F-%2Fstate%2Fcom.google%2Fread&n=1000&r=o&output=json"
         ),
         json=stream_payload,
     )
 
     client = FreshRSSClient(config, client=httpx.Client())
-    items = client.list_items(50, unread_only=True)
+    items = client.list_items(unread_only=True)
 
     assert len(items) == 2
     first, second = items
@@ -92,14 +92,58 @@ def test_list_items_unread_does_not_send_label_xt_even_when_excludes_configured(
             "http://freshrss.test/api/greader.php/reader/api/0/stream/contents/"
             "user/-/state/com.google/reading-list"
             "?xt=user%2F-%2Fstate%2Fcom.google%2Fread"
-            "&n=50&r=o&output=json"
+            "&n=1000&r=o&output=json"
         ),
         json={"items": []},
     )
 
     client = FreshRSSClient(excluding, client=httpx.Client())
-    client.list_items(50, unread_only=True)
+    client.list_items(unread_only=True)
     # If the URL didn't match (e.g. label-xt was sent), pytest-httpx raises.
+
+
+def test_list_items_follows_continuation_past_a_page_of_dropped_items(
+    config, httpx_mock
+):
+    """Issue #1: a first page full of items the selector drops (excluded
+    category here) must not hide deliverable items on later pages."""
+    from kindle_daily import selector
+
+    def raw(i: int, label: str) -> dict:
+        return {
+            "id": f"tag:google.com,2005:reader/item/{i:04d}",
+            "title": f"t{i}",
+            "categories": [f"user/1/label/{label}"],
+            "origin": {"title": "Feed"},
+            "canonical": [{"href": f"https://example.test/{i}"}],
+        }
+
+    stream = (
+        "http://freshrss.test/api/greader.php/reader/api/0/stream/contents/"
+        "user/-/state/com.google/reading-list"
+        "?xt=user%2F-%2Fstate%2Fcom.google%2Fread&n=1000&r=o&output=json"
+    )
+    httpx_mock.add_response(
+        method="POST",
+        url="http://freshrss.test/api/greader.php/accounts/ClientLogin",
+        text="Auth=tok123\n",
+    )
+    httpx_mock.add_response(
+        method="GET",
+        url=stream,
+        json={"items": [raw(i, "Comics") for i in range(3)], "continuation": "p2"},
+    )
+    httpx_mock.add_response(
+        method="GET",
+        url=stream + "&c=p2",
+        json={"items": [raw(i, "Tech") for i in range(3, 5)]},
+    )
+
+    items = FreshRSSClient(config, client=httpx.Client()).list_items(unread_only=True)
+    kept = selector.select(items, config).items
+
+    assert len(items) == 5
+    assert [it.title for it in kept] == ["t3", "t4"]
 
 
 def test_mark_read_batches_and_uses_write_token(config, httpx_mock):
