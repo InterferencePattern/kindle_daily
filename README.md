@@ -135,7 +135,7 @@ full list. Key knobs:
 
 | Var | Default | Purpose |
 |---|---|---|
-| `MAX_EPUB_MB`  | 15 | Per-Part EPUB size cap. If the day's combined EPUB doesn't fit under this size, the chunker splits it into multiple **Part N** EPUBs (breaking on category boundaries), each under the cap. Gmail's outbound SMTP cap is 25 MB on the base64-encoded message (~18 MB raw); 15 MB leaves headroom for encoding overhead. |
+| `MAX_EPUB_MB`  | 15 | Per-Part EPUB size cap. If the day's combined EPUB doesn't fit under this size, the chunker splits it into multiple **Part N** EPUBs (breaking on category boundaries), each under the cap. Gmail's outbound SMTP cap is 25 MB on the base64-encoded message (~18 MB raw); 15 MB leaves headroom for encoding overhead. About 1 MB of each Part is reserved for the cover and EPUB scaffolding; a single article bigger than the remainder is skipped and left unread. |
 | `MAX_AGE_DAYS` | 7 | Only include articles whose **published date** is within this many days. Filter is applied client-side after the FreshRSS fetch; items the feed exposes without a timestamp are kept (with a warning) so a malformed feed doesn't silently lose articles. |
 | `RUN_AT` | 05:00 | Daily run time in device-local time, e.g. `17:00`, `"5:30 PM"`, `5PM`. Read by `install.sh` when it writes the cron line, so re-run `./install.sh` after changing it. |
 | `RETENTION_DAYS` | 30 | Days to keep built EPUBs in `out/` and daily logs in `logs/`. Older files are deleted by `run.sh` at the start of each run. |

@@ -29,6 +29,11 @@ log = logging.getLogger(__name__)
 COVER_W, COVER_H = 1600, 2560
 COVER_ASPECT = COVER_W / COVER_H  # ~0.625
 COVER_JPEG_QUALITY = 82
+# Hard ceiling on the encoded cover. main.PART_OVERHEAD_BYTES reserves this
+# much of every Part for it, so it must be a guarantee, not an estimate.
+# Real covers run ~550 KB at COVER_JPEG_QUALITY.
+COVER_MAX_BYTES = 1024 * 1024
+COVER_FALLBACK_QUALITIES = (70, 55, 40)
 COVER_DOWNLOAD_TIMEOUT_S = 15
 COVER_MIN_RAW_DIM = 600  # reject too-small candidates outright
 
@@ -81,8 +86,9 @@ def render_cover(
     -------
     bytes | None
         JPEG bytes ready for ``book.set_cover()``. ``None`` if no usable
-        candidate image is found, no fonts are available, or compositing
-        fails for any other reason.
+        candidate image is found, no fonts are available, the JPEG can't
+        be squeezed under ``COVER_MAX_BYTES``, or compositing fails for
+        any other reason.
     """
     # The cover is decorative: no failure here may cancel the day's delivery.
     try:
@@ -138,9 +144,14 @@ def _render_cover(
         issue_font,
         sub_font,
     )
-    buf = io.BytesIO()
-    composed.save(buf, format="JPEG", quality=COVER_JPEG_QUALITY, optimize=True)
-    return buf.getvalue()
+    for quality in (COVER_JPEG_QUALITY, *COVER_FALLBACK_QUALITIES):
+        buf = io.BytesIO()
+        composed.save(buf, format="JPEG", quality=quality, optimize=True)
+        if buf.tell() <= COVER_MAX_BYTES:
+            return buf.getvalue()
+        log.info("cover: %d bytes at quality %d; re-encoding", buf.tell(), quality)
+    log.warning("cover: over %d bytes at every quality; skipping", COVER_MAX_BYTES)
+    return None
 
 
 # ----------------------------------------------------------------- internals

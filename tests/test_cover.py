@@ -141,3 +141,20 @@ def test_render_cover_returns_none_when_compose_raises(monkeypatch):
 
     out = cover.render_cover([_hero_article()], date=dt.date(2026, 5, 7), count=1)
     assert out is None
+
+
+def test_render_cover_steps_quality_down_to_fit_the_cap(monkeypatch):
+    """The cover never exceeds COVER_MAX_BYTES; if it can't fit, no cover."""
+    if cover._load_font(cover._SANS_BOLD, 10) is None:
+        pytest.skip("no usable fonts on this system")
+    _serve_fake_hero(monkeypatch)
+    args = ([_hero_article()],)
+    kw = {"date": dt.date(2026, 5, 7), "count": 1}
+
+    full = cover.render_cover(*args, **kw)
+    monkeypatch.setattr(cover, "COVER_MAX_BYTES", len(full) - 1)
+    smaller = cover.render_cover(*args, **kw)
+    assert smaller is not None and len(smaller) < len(full)
+
+    monkeypatch.setattr(cover, "COVER_MAX_BYTES", 100)
+    assert cover.render_cover(*args, **kw) is None

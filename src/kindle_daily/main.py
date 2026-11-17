@@ -27,10 +27,12 @@ log = logging.getLogger("kindle_daily")
 # realistic 24h backlog and keeps the GReader response a single page.
 FETCH_POOL_LIMIT = 1000
 
-# Pre-flight per-article size cap: any single article whose body + images
-# exceeds this can't fit in a 15 MB EPUB after scaffolding, so chunking
-# would never converge. Skipped articles stay unread upstream.
-MAX_ARTICLE_BYTES = 14 * 1024 * 1024
+# Bytes of every Part that aren't article content: the cover (hard-capped in
+# cover.py) plus EPUB scaffolding (CSS, OPF, NCX, nav, contents, colophon;
+# under 10 KB measured, 64 KB is headroom). Subtracted from max_epub_bytes
+# for both the chunker's coverless measurements and the per-article
+# pre-flight, so the shipped Part, cover included, fits the cap.
+PART_OVERHEAD_BYTES = cover.COVER_MAX_BYTES + 64 * 1024
 
 
 def cli(argv: list[str] | None = None) -> int:
@@ -138,7 +140,16 @@ def run(
         return 0
 
     articles = fetcher.fetch_all(items)
-    articles = _drop_oversized_articles(articles)
+    content_budget = config.max_epub_bytes - PART_OVERHEAD_BYTES
+    if content_budget <= 0:
+        log.error(
+            "MAX_EPUB_MB=%d leaves no room for articles after %d bytes of "
+            "per-Part overhead (cover + scaffolding)",
+            config.max_epub_bytes // (1024 * 1024),
+            PART_OVERHEAD_BYTES,
+        )
+        return 2
+    articles = _drop_oversized_articles(articles, content_budget)
     if not articles:
         log.warning("no fetchable articles after filtering; nothing to do")
         return 0
@@ -166,7 +177,7 @@ def run(
                 )
 
             parts = chunker.split(
-                articles, measure_build, config.max_epub_bytes, category_order
+                articles, measure_build, content_budget, category_order
             )
     except Exception:
         log.exception("failed to partition the daily issue; nothing sent")
@@ -222,23 +233,35 @@ def run(
     return 0
 
 
-def _drop_oversized_articles(articles: list[Article]) -> list[Article]:
-    """Drop articles whose body + images exceed ``MAX_ARTICLE_BYTES``.
+def _drop_oversized_articles(articles: list[Article], max_bytes: int) -> list[Article]:
+    """Drop articles whose body + images exceed ``max_bytes``.
 
-    Such articles can't fit in any 15 MB EPUB after scaffolding overhead, so
-    chunking would never converge. They stay unread in FreshRSS so the user
-    can read them in another RSS client.
+    Such articles can't fit in any Part after per-Part overhead, so chunking
+    would never converge. They stay unread in FreshRSS so the user can read
+    them in another RSS client.
+
+    Parameters
+    ----------
+    articles : list[Article]
+        Fetched articles.
+    max_bytes : int
+        Per-article content budget (``max_epub_bytes - PART_OVERHEAD_BYTES``).
+
+    Returns
+    -------
+    list[Article]
+        ``articles`` minus the oversized ones, order preserved.
     """
     kept: list[Article] = []
     for article in articles:
         size = len(article.body_html.encode("utf-8")) + sum(
             len(img.data) for img in article.images
         )
-        if size > MAX_ARTICLE_BYTES:
+        if size > max_bytes:
             log.warning(
-                "skipping oversized article (%.1f MB > %.0f MB cap): %s",
+                "skipping oversized article (%.1f MB > %.1f MB cap): %s",
                 size / (1024 * 1024),
-                MAX_ARTICLE_BYTES / (1024 * 1024),
+                max_bytes / (1024 * 1024),
                 article.url or article.title,
             )
             continue
@@ -292,13 +315,41 @@ def _build_part(
         count=len(part_articles),
         categories=_part_categories(part_articles),
     )
-    return epub_builder.build(
+    path = epub_builder.build(
         part_articles,
         date=today,
         out_dir=config.out_dir,
         cover_jpeg=cover_jpeg,
         part=part,
     )
+    if path.stat().st_size <= config.max_epub_bytes:
+        return path
+    # The chunker measured this Part without a cover, so dropping it restores
+    # the fit unless the Part was a lone article too big to bisect.
+    log.warning(
+        "part %d/%d: %d bytes exceeds the %d-byte cap",
+        index + 1,
+        total,
+        path.stat().st_size,
+        config.max_epub_bytes,
+    )
+    if cover_jpeg:
+        log.warning("part %d/%d: rebuilding without cover", index + 1, total)
+        path = epub_builder.build(
+            part_articles,
+            date=today,
+            out_dir=config.out_dir,
+            cover_jpeg=None,
+            part=part,
+        )
+        if path.stat().st_size > config.max_epub_bytes:
+            log.warning(
+                "part %d/%d: still %d bytes without cover; sending anyway",
+                index + 1,
+                total,
+                path.stat().st_size,
+            )
+    return path
 
 
 if __name__ == "__main__":  # pragma: no cover
