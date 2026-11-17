@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from kindle_daily import check_config
+from kindle_daily import check_config, config
 
 
 def _valid_env() -> dict[str, str]:
@@ -156,6 +156,27 @@ def test_main_returns_two_and_prints_errors_on_invalid_env(monkeypatch, tmp_path
     assert rc == 2
     assert "MAX_EPUB_MB" in err.getvalue()
     assert out.getvalue() == ""
+
+
+def test_load_config_raises_runtime_error_on_bad_int(monkeypatch, tmp_path: Path):
+    """#11: cli only catches RuntimeError, so a bad int must not be a ValueError."""
+    env = _valid_env()
+    env["MAX_EPUB_MB"] = "15MB"
+    monkeypatch.setattr(config, "os", _StubOS(env))
+    monkeypatch.setattr(config, "load_dotenv", lambda _path, override=False: None)
+
+    with pytest.raises(RuntimeError, match="MAX_EPUB_MB: '15MB' is not an integer"):
+        config.load_config(tmp_path)
+
+
+def test_load_config_returns_config_and_creates_out_dir(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(config, "os", _StubOS(_valid_env()))
+    monkeypatch.setattr(config, "load_dotenv", lambda _path, override=False: None)
+
+    cfg = config.load_config(tmp_path)
+
+    assert cfg.kindle_email == "alice_abc123@kindle.com"
+    assert cfg.out_dir.is_dir()
 
 
 class _StubOS:

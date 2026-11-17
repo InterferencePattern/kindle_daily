@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-# Cron entrypoint: activates the venv, sources .env, runs the pipeline.
+# Cron entrypoint: activates the venv, runs the pipeline.
+# .env is parsed by python-dotenv only, never sourced as bash (#5): an
+# unquoted value with spaces (e.g. a Gmail app password) is valid dotenv
+# but would run as a command in bash.
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -14,10 +17,6 @@ fi
 
 # shellcheck disable=SC1091
 source .venv/bin/activate
-set -a
-# shellcheck disable=SC1091
-source .env
-set +a
 
 mkdir -p logs out
 
@@ -33,7 +32,7 @@ fi
 
 # Keep RETENTION_DAYS of EPUBs and logs (#7). Old single logs/run.log is
 # matched too, so it ages out once nothing appends to it.
-RETENTION_DAYS="${RETENTION_DAYS:-30}"
+RETENTION_DAYS="$(python -c 'import os, dotenv; dotenv.load_dotenv(".env"); print(os.environ.get("RETENTION_DAYS", "30"))')"
 if [[ ! "$RETENTION_DAYS" =~ ^[1-9][0-9]*$ ]]; then
     echo "RETENTION_DAYS must be a positive integer, got '$RETENTION_DAYS'" >&2
     exit 1
