@@ -13,6 +13,7 @@ asset — preserving the author's image placement.
 
 from __future__ import annotations
 
+import hashlib
 import io
 import logging
 import re
@@ -244,6 +245,23 @@ def _word_count(html: str) -> int:
     return len(re.sub(r"<[^>]+>", " ", html).split())
 
 
+def _parse(body_html: str):
+    """Parse an HTML fragment under a ``<div>`` root; ``None`` if unparseable."""
+    try:
+        return lxml_html.fragment_fromstring(body_html, create_parent="div")
+    except (lxml_html.etree.ParserError, ValueError):
+        return None
+
+
+def _serialize(root, wrapper: str = "div") -> str:
+    """Serialize ``root`` to HTML, stripping its ``<wrapper>`` tag."""
+    out = lxml_html.tostring(root, encoding="unicode", method="html")
+    head, tail = f"<{wrapper}>", f"</{wrapper}>"
+    if out.startswith(head) and out.endswith(tail):
+        out = out[len(head) : -len(tail)]
+    return out
+
+
 # --------------------------------------------------- truncation detection
 
 # Anchor text that signals "this RSS body is just an excerpt." Matched
@@ -286,15 +304,12 @@ def _summary_appears_truncated(summary_html: str) -> bool:
     Any one is sufficient. Used to decide whether the FreshRSS-stored body
     can be trusted as-is or whether we should fetch the live page.
     """
-    if not summary_html:
-        return False
     if _word_count(summary_html) < _FULL_TEXT_MIN_WORDS:
         return True
     if _BRACKET_ELLIPSIS_RE.search(summary_html):
         return True
-    try:
-        root = lxml_html.fragment_fromstring(summary_html, create_parent="div")
-    except (lxml_html.etree.ParserError, ValueError):
+    root = _parse(summary_html)
+    if root is None:
         return False
     for a in root.xpath(".//a"):
         text = " ".join("".join(a.itertext()).split())
@@ -317,9 +332,8 @@ def _strip_duplicate_title(body_html: str, title: str) -> str:
     if not title or "<h1" not in body_html.lower():
         return body_html
 
-    try:
-        root = lxml_html.fragment_fromstring(body_html, create_parent="div")
-    except (lxml_html.etree.ParserError, ValueError):
+    root = _parse(body_html)
+    if root is None:
         return body_html
 
     target = _normalize(title)
@@ -333,10 +347,7 @@ def _strip_duplicate_title(body_html: str, title: str) -> str:
     if not removed:
         return body_html
 
-    out = lxml_html.tostring(root, encoding="unicode", method="html")
-    if out.startswith("<div>") and out.endswith("</div>"):
-        out = out[len("<div>") : -len("</div>")]
-    return out
+    return _serialize(root)
 
 
 # --------------------------------------------------- subscription CTA strip
@@ -385,9 +396,8 @@ def _strip_subscription_cta(body_html: str) -> str:
     if "<p" not in body_html.lower():
         return body_html
 
-    try:
-        root = lxml_html.fragment_fromstring(body_html, create_parent="div")
-    except (lxml_html.etree.ParserError, ValueError):
+    root = _parse(body_html)
+    if root is None:
         return body_html
 
     removed = False
@@ -407,10 +417,7 @@ def _strip_subscription_cta(body_html: str) -> str:
     if not removed:
         return body_html
 
-    out = lxml_html.tostring(root, encoding="unicode", method="html")
-    if out.startswith("<div>") and out.endswith("</div>"):
-        out = out[len("<div>") : -len("</div>")]
-    return out
+    return _serialize(root)
 
 
 def _normalize(s: str) -> str:
@@ -557,10 +564,7 @@ def _html_from_trafilatura_xml(xml_body: str) -> str:
             continue
         # Any other unknown tag is unwrapped later by _sanitize_html.
 
-    out = lxml_html.tostring(root, encoding="unicode", method="html")
-    if out.startswith("<kdroot>") and out.endswith("</kdroot>"):
-        out = out[len("<kdroot>") : -len("</kdroot>")]
-    return out
+    return _serialize(root, wrapper="kdroot")
 
 
 # ---------------------------------------------------------------- sanitize
@@ -665,10 +669,9 @@ def _sanitize_html(body_html: str, base_url: str) -> str:
     """
     if not body_html or not body_html.strip():
         return ""
-    try:
-        root = lxml_html.fragment_fromstring(body_html, create_parent="div")
-    except (lxml_html.etree.ParserError, ValueError) as exc:
-        log.warning("could not parse body for %s: %s", base_url, exc)
+    root = _parse(body_html)
+    if root is None:
+        log.warning("could not parse body for %s", base_url)
         return ""
 
     for el in list(root.iter(*_DROPPED_HTML_TAGS)):
@@ -688,10 +691,7 @@ def _sanitize_html(body_html: str, base_url: str) -> str:
         else:
             a.attrib.pop("href", None)
 
-    out = lxml_html.tostring(root, encoding="unicode", method="html")
-    if out.startswith("<div>") and out.endswith("</div>"):
-        out = out[len("<div>") : -len("</div>")]
-    return out
+    return _serialize(root)
 
 
 def _unwrap(element) -> None:
@@ -753,13 +753,11 @@ def _rewrite_images_inline(
     if not body_html or "<img" not in body_html.lower():
         return body_html, ()
 
-    try:
-        root = lxml_html.fragment_fromstring(body_html, create_parent="div")
-    except (lxml_html.etree.ParserError, ValueError):
+    root = _parse(body_html)
+    if root is None:
         return body_html, ()
 
     assets: list[ImageAsset] = []
-    seen_local: set[str] = set()
     seen_source: dict[str, str] = {}  # source URL -> local_name (for dedupe)
 
     for img in list(root.iter("img")):
@@ -779,9 +777,7 @@ def _rewrite_images_inline(
                 continue
             local_name = asset.local_name
             seen_source[absolute] = local_name
-            if local_name not in seen_local:
-                seen_local.add(local_name)
-                assets.append(asset)
+            assets.append(asset)
 
         # Rewrite this <img> to point at the local asset; strip noisy attrs
         # (srcset, lazy-load, sizes) so the EPUB renderer doesn't argue.
@@ -790,10 +786,7 @@ def _rewrite_images_inline(
         img.set("src", local_name)
         img.set("alt", alt)
 
-    out = lxml_html.tostring(root, encoding="unicode", method="html")
-    if out.startswith("<div>") and out.endswith("</div>"):
-        out = out[len("<div>") : -len("</div>")]
-    return out, tuple(assets)
+    return _serialize(root), tuple(assets)
 
 
 def _resolve_img_src(img, base_url: str) -> str:
@@ -804,12 +797,7 @@ def _resolve_img_src(img, base_url: str) -> str:
     URLs, relative URLs that can't be resolved, and known noise paths
     (logos, tracking pixels, etc.).
     """
-    candidates = [img.get("src")]
-    for attr in _LAZY_ATTRS:
-        candidates.append(img.get(attr))
-    srcset = img.get("srcset")
-    if srcset:
-        candidates.append(srcset.strip().split()[0])
+    candidates = [img.get(attr) for attr in ("src", *_LAZY_ATTRS, "srcset")]
 
     for raw in candidates:
         if not raw:
@@ -865,7 +853,7 @@ def _download_and_optimize(client: httpx.Client, url: str) -> ImageAsset | None:
 
     # Stable filename keyed off the source URL — dedupes when the same image
     # appears in multiple articles (rare, but cheap).
-    digest = _stable_hash(url)
+    digest = hashlib.sha1(url.encode("utf-8")).hexdigest()[:16]
     return ImageAsset(
         local_name=f"images/{digest}.jpg",
         media_type="image/jpeg",
@@ -874,10 +862,3 @@ def _download_and_optimize(client: httpx.Client, url: str) -> ImageAsset | None:
         orig_width=orig_w,
         orig_height=orig_h,
     )
-
-
-def _stable_hash(value: str) -> str:
-    """Short stable hex digest of ``value`` for use in a filename."""
-    import hashlib
-
-    return hashlib.sha1(value.encode("utf-8")).hexdigest()[:16]

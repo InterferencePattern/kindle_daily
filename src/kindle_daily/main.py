@@ -13,9 +13,10 @@ import datetime as dt
 import logging
 import sys
 import tempfile
+from collections import Counter
 from pathlib import Path
 
-from . import chunker, cover, epub_builder, fetcher, logging_setup, mailer, selector
+from . import chunker, cover, epub_builder, fetcher, mailer, selector
 from .config import Config, load_config
 from .fetcher import Article
 from .freshrss import FreshRSSClient
@@ -57,7 +58,17 @@ def cli(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    logging_setup.configure()
+    logging.basicConfig(
+        stream=sys.stdout,
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+    for name in ("httpx", "httpcore", "trafilatura"):
+        logging.getLogger(name).setLevel(logging.WARNING)
+    # trafilatura.downloads logs every non-200 (paywalls, bot blocks) at ERROR;
+    # we already fall back to the FreshRSS summary, so it's just noise.
+    logging.getLogger("trafilatura.downloads").setLevel(logging.CRITICAL)
     try:
         config = load_config()
     except RuntimeError as exc:
@@ -110,10 +121,7 @@ def run(
     today = dt.date.today()
     client = FreshRSSClient(config)
 
-    if include_read:
-        items = client.list_recent(limit=FETCH_POOL_LIMIT)
-    else:
-        items = client.list_unread(limit=FETCH_POOL_LIMIT)
+    items = client.list_items(FETCH_POOL_LIMIT, unread_only=not include_read)
 
     result = selector.select(items, config)
     items = result.items
@@ -154,15 +162,13 @@ def run(
         log.warning("no fetchable articles after filtering; nothing to do")
         return 0
 
-    category_order = _category_order(articles)
+    counts = Counter(a.category for a in articles)
+    category_order = _category_order(counts)
     log.info(
         "building one issue from %d articles across %d categories: %s",
         len(articles),
         len(category_order),
-        ", ".join(
-            f"{cat}({sum(1 for a in articles if a.category == cat)})"
-            for cat in category_order
-        ),
+        ", ".join(f"{cat}({counts[cat]})" for cat in category_order),
     )
 
     # Partition into size-capped Parts on Category boundaries. The chunker's
@@ -269,17 +275,14 @@ def _drop_oversized_articles(articles: list[Article], max_bytes: int) -> list[Ar
     return kept
 
 
-def _category_order(articles: list[Article]) -> list[str]:
-    """Order the Categories present in ``articles`` for the day's Issue.
+def _category_order(counts: Counter[str]) -> list[str]:
+    """Order the day's Categories, given their article ``counts``.
 
     Ordering is by article count descending, with alphabetical tiebreaks.
     Misc participates by the same rule as every other Category — no special
     pinning — so the order is fully determined by the day's content and needs
     no config the user has to maintain when subscriptions change.
     """
-    counts: dict[str, int] = {}
-    for article in articles:
-        counts[article.category] = counts.get(article.category, 0) + 1
     return sorted(counts, key=lambda category: (-counts[category], category))
 
 
@@ -303,7 +306,6 @@ def _build_part(
     cover_jpeg = cover.render_cover(
         part_articles,
         date=today,
-        count=len(part_articles),
         categories=list(chunker.group_by_category(part_articles)),
     )
     path = epub_builder.build(

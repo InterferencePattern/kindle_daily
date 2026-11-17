@@ -59,10 +59,7 @@ _SANS_REGULAR = [
 
 
 def render_cover(
-    articles: list[Article],
-    date: dt.date,
-    count: int,
-    categories: list[str] | None = None,
+    articles: list[Article], date: dt.date, categories: list[str]
 ) -> bytes | None:
     """Render a JPEG cover image for the issue. Returns ``None`` on failure.
 
@@ -73,14 +70,11 @@ def render_cover(
         as the hero candidate.
     date : datetime.date
         Issue date — drawn on the cover.
-    count : int
-        Article count for the issue's stats line. Caller decides whether to
-        pass total articles, total feeds, or something else.
-    categories : list[str], optional
+    categories : list[str]
         Categories present in this Part, in display order. Rendered as the
         roster line under the masthead (e.g. "PHOTOGRAPHY · TECH"), truncated
-        with an ellipsis if it overruns the cover width. ``None`` or empty
-        draws no roster line.
+        with an ellipsis if it overruns the cover width. Empty draws no
+        roster line.
 
     Returns
     -------
@@ -92,17 +86,14 @@ def render_cover(
     """
     # The cover is decorative: no failure here may cancel the day's delivery.
     try:
-        return _render_cover(articles, date, count, categories)
+        return _render_cover(articles, date, categories)
     except Exception:
         log.exception("cover: rendering failed; using the typographic cover")
         return None
 
 
 def _render_cover(
-    articles: list[Article],
-    date: dt.date,
-    count: int,
-    categories: list[str] | None,
+    articles: list[Article], date: dt.date, categories: list[str]
 ) -> bytes | None:
     """Body of ``render_cover``; may raise."""
     masthead_font = _load_font(_SERIF_BOLD, size=110)
@@ -137,8 +128,8 @@ def _render_cover(
     composed = _compose(
         im,
         date,
-        count,
-        categories or [],
+        len(articles),
+        categories,
         masthead_font,
         date_font,
         issue_font,

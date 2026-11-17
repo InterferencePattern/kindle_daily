@@ -45,10 +45,7 @@ def _install_fakes(monkeypatch, items, sent, marked):
         def __init__(self, cfg):
             pass
 
-        def list_unread(self, limit):
-            return items
-
-        def list_recent(self, limit):
+        def list_items(self, limit, *, unread_only):
             return items
 
         def mark_read(self, ids):
@@ -168,7 +165,7 @@ def test_send_failure_fails_the_run(monkeypatch, config):
         def __init__(self, cfg):
             pass
 
-        def list_unread(self, limit):
+        def list_items(self, limit, *, unread_only):
             return items
 
         def mark_read(self, ids):
@@ -220,7 +217,7 @@ def test_excluded_categories_are_dropped_before_fetch(monkeypatch, config):
         def __init__(self, cfg):
             pass
 
-        def list_unread(self, limit):
+        def list_items(self, limit, *, unread_only):
             return items
 
         def mark_read(self, ids):
@@ -263,7 +260,7 @@ def test_run_with_only_excluded_items_is_a_clean_noop(monkeypatch, config):
         def __init__(self, cfg):
             pass
 
-        def list_unread(self, limit):
+        def list_items(self, limit, *, unread_only):
             return items
 
         def mark_read(self, ids):
@@ -296,7 +293,7 @@ def test_no_unread_is_a_clean_noop(monkeypatch, config):
         def __init__(self, cfg):
             pass
 
-        def list_unread(self, limit):
+        def list_items(self, limit, *, unread_only):
             return []
 
         def mark_read(self, ids):
@@ -340,7 +337,7 @@ def test_oversized_article_is_skipped_before_epub_build(monkeypatch, config, cap
         def __init__(self, cfg):
             pass
 
-        def list_unread(self, limit):
+        def list_items(self, limit, *, unread_only):
             return items
 
         def mark_read(self, ids):
@@ -360,7 +357,7 @@ def test_oversized_article_is_skipped_before_epub_build(monkeypatch, config, cap
 
     monkeypatch.setattr(main_mod.epub_builder, "build", fake_build)
     monkeypatch.setattr(
-        main_mod.cover, "render_cover", lambda articles, *, date, count, categories: b""
+        main_mod.cover, "render_cover", lambda articles, *, date, categories: b""
     )
     monkeypatch.setattr(
         main_mod.mailer,
@@ -486,7 +483,7 @@ def _install_chunking_fakes(
         def __init__(self, cfg):
             pass
 
-        def list_unread(self, limit):
+        def list_items(self, limit, *, unread_only):
             return items
 
         def mark_read(self, ids):
@@ -497,7 +494,7 @@ def _install_chunking_fakes(
         main_mod.fetcher, "fetch_all", lambda its: [_article(it) for it in its]
     )
     monkeypatch.setattr(
-        main_mod.cover, "render_cover", lambda articles, *, date, count, categories: b""
+        main_mod.cover, "render_cover", lambda articles, *, date, categories: b""
     )
 
     def fake_build(articles, *, date, out_dir, cover_jpeg, part=None):

@@ -120,7 +120,6 @@ def test_render_cover_returns_jpeg_with_roster(monkeypatch):
     out = cover.render_cover(
         [_hero_article()],
         date=dt.date(2026, 5, 7),
-        count=5,
         categories=["Photography", "Tech"],
     )
 
@@ -139,7 +138,7 @@ def test_render_cover_returns_none_when_compose_raises(monkeypatch):
 
     monkeypatch.setattr(cover, "_compose", boom)
 
-    out = cover.render_cover([_hero_article()], date=dt.date(2026, 5, 7), count=1)
+    out = cover.render_cover([_hero_article()], date=dt.date(2026, 5, 7), categories=[])
     assert out is None
 
 
@@ -149,7 +148,7 @@ def test_render_cover_steps_quality_down_to_fit_the_cap(monkeypatch):
         pytest.skip("no usable fonts on this system")
     _serve_fake_hero(monkeypatch)
     args = ([_hero_article()],)
-    kw = {"date": dt.date(2026, 5, 7), "count": 1}
+    kw = {"date": dt.date(2026, 5, 7), "categories": []}
 
     full = cover.render_cover(*args, **kw)
     monkeypatch.setattr(cover, "COVER_MAX_BYTES", len(full) - 1)

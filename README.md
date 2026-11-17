@@ -38,7 +38,7 @@ freshrss-api  ──►  selector  ──►  fetcher  ──►  chunker  ─�
                                                   boundaries)
 ```
 
-1. **`freshrss.list_unread`** — calls FreshRSS's Google Reader-compatible API to
+1. **`freshrss.list_items`** — calls FreshRSS's Google Reader-compatible API to
    pull every unread item, with feed and category metadata. Auto-syncs with feed
    changes; no static config to maintain.
 2. **`fetcher.fetch_all`** — uses [trafilatura](https://trafilatura.readthedocs.io)

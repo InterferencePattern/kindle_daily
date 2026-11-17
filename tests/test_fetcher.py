@@ -138,9 +138,6 @@ def test_summary_appears_truncated_signals():
     for html in cases_full:
         assert not _summary_appears_truncated(html), html
 
-    # Empty summary returns False — caller handles emptiness separately.
-    assert not _summary_appears_truncated("")
-
 
 def test_summary_appears_truncated_via_bracket_ellipsis():
     """WordPress / Drupal / Joomla / Ghost / Squarespace excerpts typically
